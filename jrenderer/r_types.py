@@ -1,5 +1,6 @@
 from jaxtyping import Array, Integer, Float, Bool, UInt8
 import jax.numpy as jnp
+from typing import Tuple
 
 
 #Types as arrays
@@ -26,6 +27,10 @@ Face = Integer[Vec3, ""]
 Normal = Float[Vec4f, ""]
 TextureMap = UInt8[Color, "U V"]
 UV = Integer[Vec2, ""]
+
+
+#Combined Type
+PosXNorm = Tuple[Float[Position, "idx"], Float[Normal, "idx"]]
 
 
 #Special instances

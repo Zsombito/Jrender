@@ -19,11 +19,11 @@ class Model:
                 ) -> None:
 
                 
-        vertecies = jnp.apply_along_axis(lambda x : jnp.array([*x, 1.0]), 0, vertecies)
+        vertecies4f = jnp.apply_along_axis(lambda x : jnp.array([*x, 1.0]), 1, vertecies)
 
         #Mesh Info
-        self.vertecies : Float[Position, "idx"] = jnp.matmul(vertecies, transform)
-        self.normals : Float[Normal, "idx"] = jnp.apply_along_axis(lambda x : jnp.array([*x, 0.0]), 0, normals)
+        self.vertecies : Float[Position, "idx"] = jnp.matmul(vertecies4f, transform)
+        self.normals : Float[Normal, "idx"] = jnp.apply_along_axis(lambda x : jnp.array([*x, 0.0]), 1, normals) @ transform
         self.faces : Integer[Face, "idx"]= faces
 
         #Texture info
