@@ -2,6 +2,7 @@ from .scene import Scene
 from .object import Model
 from .r_types import Float, Integer, BoolV, Position, Face, PosXNorm, Vec3f
 from jax import vmap, jit
+import jax
 import jax.numpy as jnp
 from typing import Callable, List, Tuple, Any
 from .util_functions import homogenousToCartesian
@@ -76,7 +77,6 @@ class Render:
         for scene in Render.rendered_scenes:
             #Extract vertex information
             args, argAxis, extra = vertexExtractor(Render.scenes[scene])
-            print(args[0])
             shaded_args,shaded_extra = vmap(vertexShader, argAxis)(*args)
             result.append((shaded_args, shaded_extra, extra))
         return result
@@ -87,6 +87,7 @@ class Render:
         pos3D = homogenousToCartesian(position)
         return ((pos3D[2] > near) & (pos3D[2] < far) & (jnp.dot(pos3D, top) < 0) & (jnp.dot(pos3D, bot) < 0) & (jnp.dot(pos3D, left) < 0) & (jnp.dot(pos3D, right) < 0))
     
+    @jit
     def getFrustrumParams(near : float, far: float, fov: float, aspect: float):
         hw = jnp.tan(jnp.pi * fov/360) * near
         hh = hw * (1 / aspect)
@@ -99,12 +100,26 @@ class Render:
         bot = jnp.cross(se, sw)
         left = jnp.cross(sw, nw)
         return (near, far, top, bot, left, right)
+
+        
+    @jit
+    def filterFaces(face : Face, mask : BoolV):
+        return mask[face[0]] + mask[face[1]] + mask[face[2]] 
     
-    @staticmethod
+
+    @jit
+    def clip(position : Float[Position, "idx"], face : Integer[Face, "idx"], fov : float, aspect : float):
+        cameraArgs = Render.getFrustrumParams(0.01, 1.0, fov, aspect)
+        mask = vmap(Render._clipVertex, [0, None, None, None, None, None, None])(position, *cameraArgs)
+        return vmap(Render.filterFaces, [0, None])(face, mask)
+
+        
+    
     def geometryStage(vertexShader : Callable, vertexExtractor : Callable):
-        vertexShaded : List[Tuple[PosXNorm, Any, Any]] = Render._applyVertexShader(vertexShader, vertexExtractor)
+        with jax.named_scope("Vertex shading"):
+            vertexShaded : List[Tuple[PosXNorm, Any, Any]] = Render._applyVertexShader(vertexShader, vertexExtractor)
         for i, perVertex in enumerate(vertexShaded):
-            (pos, norm), _, _ = perVertex
+            (pos, norm), _, (modelIds, face) = perVertex
             #rem = pos.shape[0] % Render.clipping_batch 
             #if rem != 0:
                 #batch = pos.shape[0] // Render.clipping_batch +  1
@@ -114,16 +129,10 @@ class Render:
                 #batch = pos.shape[0] // Render.clipping_batch
                 #posAug = pos
             #posAug = posAug.reshape(batch, Render.clipping_batch,4)
-            camera = Render.scenes[Render.rendered_scenes[i]].camera
-            cameraArgs = Render.getFrustrumParams(0.01, 1.0, camera.fov, camera.aspect)
-            mask = vmap(Render._clipVertex, [0, None, None, None, None, None, None])(pos, *cameraArgs)
-            print(homogenousToCartesian(pos[0]))
-            print(homogenousToCartesian(pos[1]))
-            print(homogenousToCartesian(pos[2]))
-            print(homogenousToCartesian(pos[3]))
-            print(mask)
-
-            
+            with jax.named_scope("Clipping"):
+                camera = Render.scenes[Render.rendered_scenes[i]].camera
+                face_mask = Render.clip(pos, face, camera.fov, camera.aspect)
+                face = face[face_mask, :]
             
         pass
     

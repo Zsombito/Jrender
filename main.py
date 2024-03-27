@@ -5,6 +5,7 @@ from jrenderer.pipeline import Render
 from jrenderer.shader import stdVertexExtractor, stdVertexShader
 import jax
 import jax.numpy as jnp
+import timeit
 
 
 
@@ -16,7 +17,15 @@ vertices = jnp.array(  # pyright: ignore[reportUnknownMemberType]
         [-100.000000, -100.000000, 0.000000],
     ]
 )
-vertices = vertices * 0.01
+vertices2 = jnp.array(  # pyright: ignore[reportUnknownMemberType]
+    [
+        [100, 200, 0],
+        [200, 200, 0],
+        [200, 100, 0],
+        [100, 100, 0],
+    ]
+)
+vertices1 = vertices * 0.01
 normals = jnp.array(  # pyright: ignore[reportUnknownMemberType]
     [
         [0.000000, 0.000000, 1.000000],
@@ -37,7 +46,8 @@ uvs = jnp.array(  # pyright: ignore[reportUnknownMemberType]
 indices = jnp.array([[0, 1, 2], [0, 2, 3]])  # pyright: ignore[reportUnknownMemberType]
 
 
-model = Model(vertices, normals, indices, uvs)
+model1 = Model(vertices1, normals, indices, uvs)
+model2 = Model(vertices2, normals, indices, uvs)
 
 camera = Camera(
     position=jnp.array([5, 5, 5]) ,
@@ -50,8 +60,13 @@ camera = Camera(
 )
 
 scene = Scene(camera)
-idx = scene.add_Model(model)
+idx = scene.add_Model(model1)
+idx = scene.add_Model(model2)
 
 
 Render.add_Scene(scene, "MyScene")
 Render.geometryStage(stdVertexShader,stdVertexExtractor)
+
+
+with jax.profiler.trace("./jax-trace"):
+    Render.geometryStage(stdVertexShader,stdVertexExtractor)

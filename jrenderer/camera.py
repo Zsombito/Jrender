@@ -47,7 +47,5 @@ class Camera:
 
         self.transformMatrix : Matrix4 =  self.projection @ self.viewMatrix 
 
-        print("Transform matrix:")
-        print(self.transformMatrix)
     
     
