@@ -46,8 +46,8 @@ uvs = jnp.array(  # pyright: ignore[reportUnknownMemberType]
 indices = jnp.array([[0, 1, 2], [0, 2, 3]])  # pyright: ignore[reportUnknownMemberType]
 
 
-model1 = Model(vertices1, normals, indices, uvs)
-model2 = Model(vertices2, normals, indices, uvs)
+model1 = Model.create(vertices1, normals, indices, uvs)
+model2 = Model.create(vertices2, normals, indices, uvs)
 
 camera = Camera(
     position=jnp.array([5, 5, 5]) ,
@@ -65,6 +65,9 @@ idx = scene.add_Model(model2)
 
 
 Render.add_Scene(scene, "MyScene")
+Render.geometryStage(stdVertexShader,stdVertexExtractor)
+Render.geometryStage(stdVertexShader,stdVertexExtractor)
+Render.geometryStage(stdVertexShader,stdVertexExtractor)
 Render.geometryStage(stdVertexShader,stdVertexExtractor)
 
 

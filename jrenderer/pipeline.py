@@ -134,7 +134,7 @@ class Render:
                 face_mask = Render.clip(pos, face, camera.fov, camera.aspect)
                 face = face[face_mask, :]
             
-        pass
+        Render.scene_update = False
     
         
         

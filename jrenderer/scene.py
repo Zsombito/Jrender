@@ -1,27 +1,50 @@
 from .object import Model
 from .camera import Camera
-from .r_types import Matrix4, Position, Float, Normal, Integer, Face
+from .r_types import Matrix4, Position, Float, Normal, Integer, Face, UV, TextureMap, Array
+from typing import Tuple
+import jax.numpy as jnp
 
 
 
 class Scene:
     unique : int = 0
+
+
     def __init__(self, camera : Camera) -> None:
-        self.models : dict[int, Model] = {}
+        self.models : dict[int, Tuple[int, int]] = {}
+        self.vertecies : Float[Position, "idx"] = jnp.empty([0,4], float)
+        self.normals : Float[Normal, "idx"] = jnp.empty([0,4], float)
+        self.modelID : Integer[Array, "idx"]= jnp.empty([0,1], int)
+        self.faces : Integer[Face, "idx"] = jnp.empty([0,3], int)
         self.camera : Camera  = camera
         pass
 
-    def add_Model(self, mdl : Model) -> int:
-        self.models[Scene.unique] = mdl
+    def add_Model(self, model : Model) -> int:
+        startIdx = self.vertecies.shape[0]
+
+        changedFaceIdx = jnp.add(model.faces, jnp.ones(model.faces.shape, int) * startIdx)
+        self.faces = jnp.append(self.faces, changedFaceIdx, axis=0)
+
+        self.vertecies = jnp.append(self.vertecies, model.vertecies, axis=0)
+        self.normals = jnp.append(self.normals, model.normals, axis=0)
+
+        newIDs = jnp.ones([model.vertecies.shape[0],1], int) * Scene.unique
+        self.modelID = jnp.append(self.modelID, newIDs, axis=0)
+
+        self.models[Scene.unique] = (startIdx, self.vertecies.shape[0] + 1)
         Scene.unique += 1
+
         return Scene.unique - 1
 
 
     def transform_Model(self, idx : int, transform : Matrix4) -> None:
-        self.models[idx].applyTransform(transform)
+        startIdx, endIdx = self.models[idx]
+        self.vertecies[startIdx:endIdx, :] = self.vertecies[startIdx:endIdx, :] @ transform
+        self.normals[startIdx:endIdx, :] = self.normals[startIdx:endIdx, :] @ transform
+        
     
     def delete_Model(self, idx : int) -> None:
-        self.models.pop(idx)
+        raise Exception("Not implemented yet")
     
         
         
