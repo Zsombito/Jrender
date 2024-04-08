@@ -9,7 +9,8 @@ import jax.numpy as jnp
 def _stdVertexShader(position : Position, normal : Normal, view: Matrix4, proj: Matrix4) -> tuple:
     return (((position @ view) @ proj, (normal @ view) @ proj), None)
 
-stdVertexShader : Callable = jit(_stdVertexShader)
+stdVertexShader = jit(_stdVertexShader)
+
     
 #Standard Vertex Info extractor (pos, normal, modelID)
 def stdVertexExtractor(scene : Scene):

@@ -56,7 +56,9 @@ camera = Camera(
     fov=90,
     aspect=16/9,
     near=0.1,
-    far=10000
+    far=10000,
+    X=256,
+    Y=144
 )
 
 scene = Scene(camera)
@@ -65,11 +67,14 @@ idx = scene.add_Model(model2)
 
 
 Render.add_Scene(scene, "MyScene")
-Render.geometryStage(stdVertexShader,stdVertexExtractor)
-Render.geometryStage(stdVertexShader,stdVertexExtractor)
-Render.geometryStage(stdVertexShader,stdVertexExtractor)
-Render.geometryStage(stdVertexShader,stdVertexExtractor)
+Render.loadVertexShaders(stdVertexShader, stdVertexExtractor)
+Render.geometryStage()
+Render.geometryStage()
+Render.geometryStage()
+Render.geometryStage()
 
 
-with jax.profiler.trace("./jax-trace"):
-    Render.geometryStage(stdVertexShader,stdVertexExtractor)
+print(stdVertexShader._cache_size())
+with jax.profiler.trace("./jax-trace-frags"):
+    Render.geometryStage()
+print(stdVertexShader._cache_size())

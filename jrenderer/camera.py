@@ -7,7 +7,7 @@ from jax import jit
 
 
 class Camera:
-    def __init__(self, position : Vec3f, target : Vec3f, up : Vec3f, fov : float, aspect : float, near : float, far : float) -> None:
+    def __init__(self, position : Vec3f, target : Vec3f, up : Vec3f, fov : float, aspect : float, near : float, far : float, X:int , Y: int) -> None:
         self.position = position
         self.target = target
         self.up = up
@@ -15,6 +15,8 @@ class Camera:
         self.aspect = aspect
         self.near = near
         self.far = far
+        self.X = X
+        self.Y = Y
         self.updateMatricies()
 
 
@@ -44,8 +46,15 @@ class Camera:
             .at[2,3].set(1)
 
         )
-
         self.transformMatrix : Matrix4 =  self.projection @ self.viewMatrix 
+
+
+        #Viewport Matrix
+        self.viewPortMatrix = (jnp.identity(4)
+            .at[0,0].set(self.X / 2)
+            .at[3,0].set(self.X / 2)
+            .at[1, 1].set(-self.Y / 2)
+            .at[3,1].set(self.Y / 2))
 
     
     
