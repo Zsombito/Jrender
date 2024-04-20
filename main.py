@@ -64,17 +64,22 @@ camera = Camera(
 scene = Scene(camera)
 idx = scene.add_Model(model1)
 idx = scene.add_Model(model2)
+for i in range(12):
+    print(f"Loop: {i}/10")
+    indices = jnp.append(indices, indices, 0)
+model1 = Model.create(vertices1, normals, indices, uvs)
+
+idx = scene.add_Model(model1)
+
+scene.changeShader(stdVertexExtractor, stdVertexShader)
 
 
 Render.add_Scene(scene, "MyScene")
-Render.loadVertexShaders(stdVertexShader, stdVertexExtractor)
-Render.geometryStage()
-Render.geometryStage()
-Render.geometryStage()
-Render.geometryStage()
+Render.render()
+#Render.render()
+#Render.render()
+#Render.render()
 
 
-print(stdVertexShader._cache_size())
-with jax.profiler.trace("./jax-trace-frags"):
-    Render.geometryStage()
-print(stdVertexShader._cache_size())
+with jax.profiler.trace("./jax-trace-minibatching"):
+    Render.render()

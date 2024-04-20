@@ -1,9 +1,8 @@
 from .object import Model
 from .camera import Camera
 from .r_types import Matrix4, Position, Float, Normal, Integer, Face, UV, TextureMap, Array
-from typing import Tuple
+from typing import Tuple, Callable
 import jax.numpy as jnp
-
 
 
 class Scene:
@@ -17,6 +16,8 @@ class Scene:
         self.modelID : Integer[Array, "idx"]= jnp.empty([0,1], int)
         self.faces : Integer[Face, "idx"] = jnp.empty([0,3], int)
         self.camera : Camera  = camera
+        self.vertexExtractor = None
+        self.vertexShader = None
         pass
 
     def add_Model(self, model : Model) -> int:
@@ -41,6 +42,10 @@ class Scene:
         startIdx, endIdx = self.models[idx]
         self.vertecies[startIdx:endIdx, :] = self.vertecies[startIdx:endIdx, :] @ transform
         self.normals[startIdx:endIdx, :] = self.normals[startIdx:endIdx, :] @ transform
+    
+    def changeShader(self, vertexExtractor : Callable, vertexShader : Callable):
+        self.vertexShader = vertexShader
+        self.vertexExtractor = vertexExtractor
         
     
     def delete_Model(self, idx : int) -> None:

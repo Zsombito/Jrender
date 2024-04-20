@@ -6,10 +6,10 @@ from typing import Callable
 import jax.numpy as jnp
 
 #Standard Vertex Shading (Phong):
-def _stdVertexShader(position : Position, normal : Normal, view: Matrix4, proj: Matrix4) -> tuple:
+@jit
+def stdVertexShader(position : Position, normal : Normal, view: Matrix4, proj: Matrix4) -> tuple:
     return (((position @ view) @ proj, (normal @ view) @ proj), None)
 
-stdVertexShader = jit(_stdVertexShader)
 
     
 #Standard Vertex Info extractor (pos, normal, modelID)
@@ -19,6 +19,6 @@ def stdVertexExtractor(scene : Scene):
     modelID : Integer[Array, "1"]= scene.modelID
     face : Integer[Face, "idx"] = scene.faces
 
-    return ((pos, norm, scene.camera.viewMatrix, scene.camera.projection), [0, 0, None, None], (modelID, face))
+    return ((pos, norm, scene.camera.viewMatrix, scene.camera.projection), [0, 0, None, None], face, modelID)
 
         
