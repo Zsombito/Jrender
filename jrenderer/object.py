@@ -14,7 +14,7 @@ class Model(NamedTuple):
     faces : Integer[Face, "idx"]
 
     #Texture info
-    uVs : Integer[UV, "idx"]
+    uVs : Float[UV, "idx"]
     diffuseMap : Integer[TextureMap, ""] 
     specularMap : Integer[TextureMap, ""]
 

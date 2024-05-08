@@ -19,8 +19,8 @@ class Render:
     clipping_batch = 4
     currentScene : Scene = None
     rasterGrid = 50 
-    faceBatch = 4
-    bracketBatch = 4
+    faceBatch = 2
+    bracketBatch = 2
     fragBatch = 5
     primitiveParalell = 50000
 
@@ -365,10 +365,10 @@ class Render:
     def _fragmentShading(fragments, faces, norms, perVertexExtra, shaded_perVertexExtra):
         def mapY(fragment):
             idx = fragment[3].astype(int)
-            primitiveData, extraPrimitiveData = Render.currentScene.fragmentExtractor(idx, faces, norms, perVertexExtra, shaded_perVertexExtra)
-            diffText = Render.currentScene.diffuseText
-            specText = Render.currentScene.specText
-            return Render.currentScene.fragmentShader(fragment, Render.currentScene.lights, diffText, specText, extraPrimitiveData[0], *primitiveData)
+            primitiveData, modelID = Render.currentScene.fragmentExtractor(idx, faces, norms, perVertexExtra, shaded_perVertexExtra)
+            diffText = Render.currentScene.diffuseText[modelID]
+            specText = Render.currentScene.specText[modelID]
+            return Render.currentScene.fragmentShader(fragment, Render.currentScene.lights, diffText, specText,  *primitiveData)
         
         
         def mapX(fragments):

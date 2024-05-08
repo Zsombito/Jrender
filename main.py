@@ -29,10 +29,10 @@ normals = jnp.array(  # pyright: ignore[reportUnknownMemberType]
 
 uvs = jnp.array(  # pyright: ignore[reportUnknownMemberType]
     [
-        [1.000000, 0.000000],
-        [1.000000, 1.000000],
-        [0.000000, 1.000000],
-        [0.000000, 0.000000],
+        [1.000000, 0.000000, 1],
+        [1.000000, 1.000000, 1],
+        [0.000000, 1.000000, 1],
+        [0.000000, 0.000000, 1],
     ]
 )
 diffMap = jnp.array([
@@ -53,15 +53,15 @@ indices = jnp.array([[0, 2, 3], [0, 1, 2], ])  # pyright: ignore[reportUnknownMe
 model1 = Model.create(vertices1, normals, indices, uvs, diffMap, specMap)
 
 camera = Camera(
-    position=jnp.array([0, 5, 5]) ,
+    position=jnp.array([5, 5, 5]) ,
     target=jnp.zeros(3),
     up=jnp.array([0.0, 1.0, 0.0]),
     fov=90,
     aspect=16/9,
     near=0.1,
     far=10000,
-    X=256,
-    Y=144
+    X=2560,
+    Y=1440
 )
 light = Light(camera.viewMatrix, [1000, 1000, 1000], [0.0, 150.0, 0.0, 1], 0)
 lights = jnp.array([

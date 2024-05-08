@@ -26,7 +26,7 @@ Position = Float[Vec4f, ""]
 Face = Integer[Vec3, ""]
 Normal = Float[Vec4f, ""]
 TextureMap = UInt8[Color, "U V"]
-UV = Integer[Vec2, ""]
+UV = Float[Vec3f, ""]
 
 
 #Combined Type
