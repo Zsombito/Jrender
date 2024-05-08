@@ -365,8 +365,10 @@ class Render:
     def _fragmentShading(fragments, faces, norms, perVertexExtra, shaded_perVertexExtra):
         def mapY(fragment):
             idx = fragment[3].astype(int)
-            extraPrimitiveData = Render.currentScene.fragmentExtractor(idx, faces, norms, perVertexExtra, shaded_perVertexExtra)
-            return Render.currentScene.fragmentShader(fragment, Render.currentScene.lights, *extraPrimitiveData)
+            primitiveData, extraPrimitiveData = Render.currentScene.fragmentExtractor(idx, faces, norms, perVertexExtra, shaded_perVertexExtra)
+            diffText = Render.currentScene.diffuseText
+            specText = Render.currentScene.specText
+            return Render.currentScene.fragmentShader(fragment, Render.currentScene.lights, diffText, specText, extraPrimitiveData[0], *primitiveData)
         
         
         def mapX(fragments):

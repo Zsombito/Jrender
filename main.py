@@ -3,6 +3,7 @@ from jrenderer.object import Model
 from jrenderer.scene import Scene
 from jrenderer.pipeline import Render
 from jrenderer.shader import stdVertexExtractor, stdVertexShader, stdFragmentExtractor, stdFragmentShader
+from jrenderer.lights import Light
 import jax
 import jax.numpy as jnp
 import timeit
@@ -11,10 +12,10 @@ import timeit
 
 vertices1 = jnp.array(  # pyright: ignore[reportUnknownMemberType]
     [
-        [1.000000, -1.000000, 0.000000],
-        [1.000000, 1.000000, 0.000000],
-        [-1.000000, 1.000000, 0.000000],
-        [-1.000000, -1.000000, 0.000000],
+        [1.000000, 0.000000, -1.000000],
+        [1.000000, 0.000000, 1.000000],
+        [-1.000000, 0.000000, 1.000000],
+        [-1.000000, 0.000000, -1.000000],
     ]
 )
 normals = jnp.array(  # pyright: ignore[reportUnknownMemberType]
@@ -34,10 +35,22 @@ uvs = jnp.array(  # pyright: ignore[reportUnknownMemberType]
         [0.000000, 0.000000],
     ]
 )
-indices = jnp.array([[0, 2, 3], [0, 1, 2], [0, 2, 3], ])  # pyright: ignore[reportUnknownMemberType]
+diffMap = jnp.array([
+    [
+        [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
+        [[0.0, 1.0, 1.0], [1.0, 0.0, 0.0]]
+    ]]
+)
+specMap = jnp.array([
+    [
+        [[0.0, 0.0, 0.0], [0.0, 0.0, 0.0]],
+        [[0.0, 0.0, 0.0], [0.0, 0.0, 0.0]]
+    ]]
+)
+indices = jnp.array([[0, 2, 3], [0, 1, 2], ])  # pyright: ignore[reportUnknownMemberType]
 
 
-model1 = Model.create(vertices1, normals, indices, uvs)
+model1 = Model.create(vertices1, normals, indices, uvs, diffMap, specMap)
 
 camera = Camera(
     position=jnp.array([0, 5, 5]) ,
@@ -50,11 +63,11 @@ camera = Camera(
     X=256,
     Y=144
 )
+light = Light(camera.viewMatrix, [1000, 1000, 1000], [0.0, 150.0, 0.0, 1], 0)
 lights = jnp.array([
-    [5.0, 0.0, 10.0, 0.2, 0.2, 100.0, 1],
-    [-5.0, 0.0, 10.0, 100.0, 0.2, 0.2, 1]])
+    light.getJnpArray()])
 
-scene = Scene(camera, lights)
+scene = Scene(camera, lights, 2, 2)
 idx = scene.add_Model(model1)
 #for i in range(15):
     #print(f"Loop: {i}/10")
