@@ -9,7 +9,7 @@ class Scene:
     unique : int = 0
 
 
-    def __init__(self, camera : Camera) -> None:
+    def __init__(self, camera : Camera, light) -> None:
         self.models : dict[int, Tuple[int, int]] = {}
         self.vertecies : Float[Position, "idx"] = jnp.empty([0,4], float)
         self.normals : Float[Normal, "idx"] = jnp.empty([0,4], float)
@@ -18,6 +18,7 @@ class Scene:
         self.camera : Camera  = camera
         self.vertexExtractor = None
         self.vertexShader = None
+        self.lights = light
         pass
 
     def add_Model(self, model : Model) -> int:
@@ -29,7 +30,7 @@ class Scene:
         self.vertecies = jnp.append(self.vertecies, model.vertecies, axis=0)
         self.normals = jnp.append(self.normals, model.normals, axis=0)
 
-        newIDs = jnp.ones([model.vertecies.shape[0],1], int) * Scene.unique
+        newIDs = jnp.ones([model.faces.shape[0],1], int) * Scene.unique
         self.modelID = jnp.append(self.modelID, newIDs, axis=0)
 
         self.models[Scene.unique] = (startIdx, self.vertecies.shape[0] + 1)
@@ -43,9 +44,11 @@ class Scene:
         self.vertecies[startIdx:endIdx, :] = self.vertecies[startIdx:endIdx, :] @ transform
         self.normals[startIdx:endIdx, :] = self.normals[startIdx:endIdx, :] @ transform
     
-    def changeShader(self, vertexExtractor : Callable, vertexShader : Callable):
+    def changeShader(self, vertexExtractor : Callable, vertexShader : Callable, fragmentExtractor : Callable, fragmentShader : Callable):
         self.vertexShader = vertexShader
         self.vertexExtractor = vertexExtractor
+        self.fragmentShader = fragmentShader
+        self.fragmentExtractor = fragmentExtractor
         
     
     def delete_Model(self, idx : int) -> None:
