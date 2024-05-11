@@ -14,7 +14,7 @@ class Light:
         self.point = point
     
     def getJnpArray(self):
-        pos = homogenousToCartesian(self.pos)
+        pos = self.pos[:3]
         return jnp.array([pos[0], pos[1], pos[2], self.intensity[0], self.intensity[1], self.intensity[2], self.point])
         
         

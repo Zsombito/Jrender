@@ -19,8 +19,8 @@ class Render:
     clipping_batch = 4
     currentScene : Scene = None
     rasterGrid = 50 
-    faceBatch = 2
-    bracketBatch = 2
+    faceBatch = 1000
+    bracketBatch = 1000
     fragBatch = 5
     primitiveParalell = 50000
 
@@ -131,6 +131,24 @@ class Render:
 #                  VertexShading & Cliping                        #
 ###################################################################
 
+    @jit
+    def extractForGrad():
+        return Render.currentScene.vertexExtractor(Render.currentScene)
+    # (pos, norm, uv, viewM, projM), axis, face, perVertexExtra = inputs
+
+    @jit
+    def _geometryStage_forGrad(pos, norm, uv, viewM, projM, axis, face, perVertexExtra):
+        camera = Render.currentScene.camera 
+        (pos, norm), shaded_perVertexExtra = vmap(Render.currentScene.vertexShader, [0,0,0,None,None])(pos, norm, uv, viewM, projM)
+        with jax.named_scope("Clipping"):
+            face_mask = Render._clip(pos, face, camera.fov, camera.aspect)
+        
+        with jax.named_scope("Viewport transform"):
+            pos3 = Render._viewPort(pos, camera.viewPortMatrix)
+        
+        return face_mask, (pos3, norm, face), perVertexExtra, shaded_perVertexExtra
+
+    
         
     @jit
     def _applyVertexShader():
@@ -405,7 +423,7 @@ class Render:
     
 
     @staticmethod
-    def render_C():
+    def render_forward():
         for scene in Render.rendered_scenes:
             Render.currentScene = Render.scenes[scene]
             with jax.named_scope("Geometry Stage:"):
@@ -445,6 +463,60 @@ class Render:
 
             frame_buffer = frame_buffer * 255
             return frame_buffer[:Render.currentScene.camera.X, :Render.currentScene.camera.Y, :].astype(int)
+
+    @staticmethod
+    def render_with_grad(scene : str):
+        Render.currentScene = Render.scenes[scene]
+        
+        inputs = Render.extractForGrad()
+        (pos, norm, uv, viewM, projM), axis, face, perVertexExtra = inputs
+
+        
+        def render(pos, norm, uv, view, projM, axis, face, perVertexExtra):
+            face = face.astype(int)
+            with jax.named_scope("Geometry Stage:"):
+                face_mask, (pos3, norm, face), perVertexExtra, shaded_perVertexExtra = Render._geometryStage_forGrad(pos, norm, uv, view, projM, axis, face, perVertexExtra)
+
+            print(f"Amount of faces:{face.shape}")
+
+            with jax.named_scope("Face filtering and batchin"):
+                face = face[face_mask, :]
+                pos3, batchedFaces  = Render._faceBatching(face, pos3)
+
+            with jax.named_scope("Create brackets"):
+                corners, brackets, bracket_mask = Render._bracketing(pos3, batchedFaces)
+                corners = corners.reshape(corners.shape[0] * corners.shape[1], 3, 3)
+                print(f"The shape of the bracket_mask:{bracket_mask.shape}")
+
+            frame_buffer = jnp.zeros((brackets.shape[0] * Render.rasterGrid, brackets.shape[1] * Render.rasterGrid, 3), float)
+
+            for i in range(brackets.shape[0]):
+                for j in range(brackets.shape[1]):
+                    with jax.named_scope("Filter Brackets"):
+                        curr_bracket = brackets[i, j, :, :]
+                        curr_mask = bracket_mask[i, j, :, :]
+                        if curr_mask.sum() == 0:
+                            continue
+                        curr_bracket, _ = Render.arrayBatcher(Render.bracketBatch, curr_bracket[curr_mask], [], 0, corners.shape[0] - 1)
+                    
+                    with jax.named_scope("Rasterization"):
+                        fragments = Render._rasterize(curr_bracket, i, j, corners, curr_bracket.shape[0])
+
+                    with jax.named_scope("Fragment shading"): #Continue from here
+                        shaded_fragments = Render._fragmentShading(fragments, face, norm, perVertexExtra, shaded_perVertexExtra)
+                        (shaded_fragments)
+
+                    with jax.named_scope("Buffer mixing"):
+                        frame_buffer = Render._bufferMixing(shaded_fragments, frame_buffer, i, j)
+
+            frame_buffer = frame_buffer * 255
+            return frame_buffer[:Render.currentScene.camera.X, :Render.currentScene.camera.Y, :].astype(int)
+        
+        execute_render = jax.jacfwd(jit(render), [0, 1, 2, 3, 4, 6])
+        return execute_render(pos, norm, uv, viewM, projM, axis, face.astype(float), perVertexExtra)
+
+
+
 
                         
 

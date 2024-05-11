@@ -4,6 +4,7 @@ from jrenderer.scene import Scene
 from jrenderer.pipeline import Render
 from jrenderer.shader import stdVertexExtractor, stdVertexShader, stdFragmentExtractor, stdFragmentShader
 from jrenderer.lights import Light
+from jrenderer.capsule import create_capsule
 import jax
 import jax.numpy as jnp
 import timeit
@@ -43,7 +44,7 @@ diffMap = jnp.array([
 )
 specMap = jnp.array([
     [
-        [[0.0, 0.0, 0.0], [0.0, 0.0, 0.0]],
+        [[0.05, 0.05, 0.05], [0.0, 0.0, 0.0]],
         [[0.0, 0.0, 0.0], [0.0, 0.0, 0.0]]
     ]]
 )
@@ -53,22 +54,21 @@ indices = jnp.array([[0, 2, 3], [0, 1, 2], ])  # pyright: ignore[reportUnknownMe
 model1 = Model.create(vertices1, normals, indices, uvs, diffMap, specMap)
 
 camera = Camera(
-    position=jnp.array([5, 5, 5]) ,
+    position=jnp.array([-5, 5, 0]) ,
     target=jnp.zeros(3),
     up=jnp.array([0.0, 1.0, 0.0]),
     fov=90,
     aspect=16/9,
     near=0.1,
     far=10000,
-    X=2560,
-    Y=1440
+    X=1280,
+    Y=720
 )
-light = Light(camera.viewMatrix, [1000, 1000, 1000], [0.0, 150.0, 0.0, 1], 0)
+light = Light(camera.viewMatrix, [1, 1, 1], [50.0, 150.0, 100.0, 1], 0)
 lights = jnp.array([
     light.getJnpArray()])
 
 scene = Scene(camera, lights, 2, 2)
-idx = scene.add_Model(model1)
 #for i in range(15):
     #print(f"Loop: {i}/10")
     #indices = jnp.append(indices, indices, 0)
@@ -77,17 +77,23 @@ idx = scene.add_Model(model1)
 #idx = scene.add_Model(model1)
 
 scene.changeShader(stdVertexExtractor, stdVertexShader, stdFragmentExtractor, stdFragmentShader)
+capsule = create_capsule(1.0, 0.5, 1, diffMap, specMap)
+scene.add_Model(capsule)
+
 
 
 Render.add_Scene(scene, "MyScene")
-Render.render_C()
+frame_buffer =Render.render_forward()
 #Render.render()
 #Render.render()
 #Render.render()
 
+#print(Render.render_with_grad("MyScene")[0].nonzero())
 
-with jax.profiler.trace("./jax-trace-buffer"):
-    frame_buffer = Render.render_C()
+
+
+#with jax.profiler.trace("./jax-trace-buffer"):
+    #frame_buffer = Render.render_C()
 
 
 from typing import cast

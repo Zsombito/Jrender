@@ -11,7 +11,7 @@ import jax.numpy as jnp
 def stdVertexShader(position : Position, normal : Normal, uv,  view: Matrix4, proj: Matrix4) -> tuple:
     posProj = position @ view @ proj
     uv = uv / posProj[3]
-    return ((posProj, (normal @ view) @ proj), [position[:3], uv])
+    return ((posProj,normal), [position[:3], uv])
 
 
     
@@ -43,12 +43,14 @@ def stdFragmentExtractor(idx, faces, norm, perVertexExtra, shaded_perVertexExtra
 def stdFragmentShader(interpolatedFrag, lights, diffText, specText, normals, worldSpacePosition, uvs):
     def perLight(light, pos, norm, kdiff, kspec):
         I = light[3:6]  / jnp.where(light[6] == 0, 1.0, (jnp.linalg.norm(light[:3] - pos)) * (jnp.linalg.norm(light[:3] - pos)))
-        V =  normalise(-pos)
-        L = normalise(pos - light[:3])
-        R = normalise(L - 2 * (jnp.dot(L, norm) * norm))
-        Ispec = I * (kspec * jnp.dot(R, V) ** 32)
-        Idiff = I * (jnp.dot(L, norm) * kdiff)
-        return jnp.clip(Ispec + Idiff, 0, 1)
+        #V =  normalise(-pos)
+        L = normalise(light[:3] - pos)
+        #R = normalise(L - 2 * (jnp.dot(L, norm) * norm))
+        lambertian = jnp.clip(jnp.dot(norm, L), 0.0)
+        #Ispec = jnp.clip(I * (kspec * jnp.dot(R, V) ** 32), 0, 1)
+        Idiff = jnp.clip(I * (lambertian * kdiff), 0, 1)
+        Iambient = kdiff * 0.1
+        return jnp.clip(Idiff + Iambient, 0, 1)
 
 
 
@@ -64,8 +66,8 @@ def stdFragmentShader(interpolatedFrag, lights, diffText, specText, normals, wor
     
     kdiff = diffText[uv[0] , uv[1], :]
     kspec = specText[uv[0], uv[1], :]
-    normal = normalise(normals[0] * alpha + normals[1] * beta + normals[2] * gamma)
-    normal = normal[:3]
+    normal = normals[0] * alpha + normals[1] * beta + normals[2] * gamma
+    normal = normalise(normal[:3])
     color = vmap(perLight, [0, None, None, None, None])(lights, pos, normal, kdiff, kspec)
     color = jnp.clip(color.sum(0), 0, 1)
     return jnp.array([interpolatedFrag[4], color[0], color[1], color[2]])
