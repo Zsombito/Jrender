@@ -2,7 +2,7 @@
 import jax.experimental
 import jax.experimental.host_callback
 from .scene import Scene
-from .object import Model
+from .model import Model
 from .r_types import Float, Integer, BoolV, Position, Face, PosXNorm, Vec3f, Matrix4, Normal, UV, Array
 from jax import vmap, jit
 import jax
@@ -386,7 +386,7 @@ class Render:
             primitiveData, modelID = Render.currentScene.fragmentExtractor(idx, faces, norms, perVertexExtra, shaded_perVertexExtra)
             diffText = Render.currentScene.diffuseText[modelID]
             specText = Render.currentScene.specText[modelID]
-            return Render.currentScene.fragmentShader(fragment, Render.currentScene.lights, diffText, specText,  *primitiveData)
+            return Render.currentScene.fragmentShader(fragment, Render.currentScene.lights, Render.currentScene.camera.position, diffText, specText,  *primitiveData)
         
         
         def mapX(fragments):

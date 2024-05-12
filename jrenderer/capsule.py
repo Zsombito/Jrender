@@ -1,7 +1,7 @@
 
 import jax
 import jax.numpy as jnp
-from .object import Model
+from .model import Model
 
 with jax.ensure_compile_time_eval():
     _verts  = jnp.array(  # pyright: ignore[reportUnknownMemberType]
@@ -1950,6 +1950,7 @@ def create_capsule(
     up_axis,
     diffuse_map,
     specular_map,
+    transform = jnp.identity(4, float)
 ):
     """Create a capsule model.
 
@@ -1981,7 +1982,7 @@ def create_capsule(
     )
     normals = _normals[:, shuffled]
     print(f"Verts:{verts.shape}")
-    return Model.create(verts, normals, _faces, _uvs, diffuse_map, specular_map)
+    return Model(verts, normals, _faces, _uvs, diffuse_map, specular_map, transform=transform)
     return Model(
         verts=verts,
         norms=normals,

@@ -1,17 +1,19 @@
 from jax import jit, vmap
 from .r_types import Position, Normal, Face, UV, Matrix4, Float, Integer, Array
 from .scene import Scene
-from .object import Model
+from .model import Model
 from .util_functions import normalise, homogenousToCartesian
 from typing import Callable
 import jax.numpy as jnp
 
 #Standard Vertex Shading (Phong):
 @jit
-def stdVertexShader(position : Position, normal : Normal, uv,  view: Matrix4, proj: Matrix4) -> tuple:
-    posProj = position @ view @ proj
+def stdVertexShader(position : Position, normal : Normal, uv, modelID, mdlMatricies,  view: Matrix4, proj: Matrix4) -> tuple:
+    mdlMtrx = mdlMatricies[modelID]
+    position = position @ mdlMtrx
+    posProj = position @ view @ proj 
     uv = uv / posProj[3]
-    return ((posProj,normal), [position[:3], uv])
+    return ((posProj,normal @ mdlMtrx), [position[:3], uv])
 
 
     
@@ -20,11 +22,13 @@ def stdVertexExtractor(scene : Scene):
     pos : Float[Position, "idx"] = scene.vertecies
     norm : Float[Normal, "idx"] = scene.normals
     modelID : Integer[Array, "1"]= scene.modelID
+    modelIDperVertex : Integer[Array, "1"]= scene.modelIDperVertex
     face : Integer[Face, "idx"] = scene.faces
     uv = scene.uvs
+    modelMatricies = scene.mdlMatricies
     
 
-    return ((pos, norm, uv, scene.camera.viewMatrix, scene.camera.projection), [0, 0, 0, None, None], face, [modelID])
+    return ((pos, norm, uv, modelIDperVertex, modelMatricies, scene.camera.viewMatrix, scene.camera.projection), [0, 0, 0, 0, None, None, None], face, [modelID])
 
 
 @jit
@@ -40,17 +44,22 @@ def stdFragmentExtractor(idx, faces, norm, perVertexExtra, shaded_perVertexExtra
     return [normal, worldSpacePosition, uv] , modelID
 
 @jit
-def stdFragmentShader(interpolatedFrag, lights, diffText, specText, normals, worldSpacePosition, uvs):
+def stdFragmentShader(interpolatedFrag, lights, camPos, diffText, specText, normals, worldSpacePosition, uvs):
     def perLight(light, pos, norm, kdiff, kspec):
         I = light[3:6]  / jnp.where(light[6] == 0, 1.0, (jnp.linalg.norm(light[:3] - pos)) * (jnp.linalg.norm(light[:3] - pos)))
-        #V =  normalise(-pos)
+
         L = normalise(light[:3] - pos)
-        #R = normalise(L - 2 * (jnp.dot(L, norm) * norm))
-        lambertian = jnp.clip(jnp.dot(norm, L), 0.0)
-        #Ispec = jnp.clip(I * (kspec * jnp.dot(R, V) ** 32), 0, 1)
-        Idiff = jnp.clip(I * (lambertian * kdiff), 0, 1)
+        lambartian = jnp.dot(norm, L)
+        Idiff = jnp.clip(I * (lambartian * kdiff), 0, 1)
+
+
+        V =  normalise(pos - camPos)
+        R = normalise(L - 2 * (jnp.dot(L, norm) * norm))
+        Ispec = jnp.where(lambartian > 0, jnp.clip(I * (kspec * jnp.dot(R, V) ** 32), 0, 1), jnp.zeros(3, float))
+
         Iambient = kdiff * 0.1
-        return jnp.clip(Idiff + Iambient, 0, 1)
+
+        return jnp.clip(Ispec + Idiff + Iambient, 0, 1)
 
 
 

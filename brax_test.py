@@ -1,28 +1,21 @@
-import functools
 from typing import Iterable, NamedTuple, Optional
 
 import jax
 from jax import numpy as jp
 import numpy as onp
-import matplotlib.animation as animation
-import matplotlib.pyplot as plt
-from PIL import Image
 
 import brax
 from brax import base, envs, math
-from brax.io import model
-from brax.training.acme import running_statistics, specs
-import brax.training.agents.ppo.networks as ppo_networks
-import brax.training.agents.sac.networks as sac_networks
 
 import trimesh
 
-from renderer import CameraParameters as Camera
-from renderer import LightParameters as Light
-from renderer import Model as RendererMesh
-from renderer import ModelObject as Instance
-from renderer import ShadowParameters as Shadow
-from renderer import Renderer, UpAxis, create_capsule, create_cube, transpose_for_display
+from jrenderer.camera import Camera
+from jrenderer.lights import Light
+from jrenderer.capsule import create_capsule
+from jrenderer.cube import create_cube
+from jrenderer.pipeline import Render
+from jrenderer.model import Model
+from jrenderer.scene import Scene
 
 
 canvas_width: int = 84 #@param {type:"integer"}
@@ -45,7 +38,7 @@ class Obj(NamedTuple):
 
   col is accessed from the batched geoms `sys.geoms`, representing one geom.
   """
-  instance: Instance
+  instance: Model
   """An instance to be rendered in the scene, defined by jaxrenderer."""
   link_idx: int
   """col.link_idx if col.link_idx is not None else -1"""
@@ -82,7 +75,7 @@ def _build_objects(sys: brax.System) -> list[Obj]:
         model = create_capsule(
           radius=col.radius,
           half_height=half_height,
-          up_axis=UpAxis.Z,
+          up_axis=2,
           diffuse_map=tex,
           specular_map=specular_map,
         )
@@ -97,7 +90,7 @@ def _build_objects(sys: brax.System) -> list[Obj]:
         model = create_capsule(
           radius=col.radius,
           half_height=jp.array(0.),
-          up_axis=UpAxis.Z,
+          up_axis=2,
           diffuse_map=tex,
           specular_map=specular_map,
         )
@@ -114,10 +107,10 @@ def _build_objects(sys: brax.System) -> list[Obj]:
         continue
       elif isinstance(col, base.Mesh):
         tm = trimesh.Trimesh(vertices=col.vert, faces=col.face)
-        model = RendererMesh.create(
-            verts=tm.vertices,
-            norms=tm.vertex_normals,
-            uvs=jp.zeros((tm.vertices.shape[0], 2), dtype=int),
+        model = Model.create(
+            vertecies=tm.vertices,
+            normals=tm.vertex_normals,
+            uvs=jp.ones((tm.vertices.shape[0], 3), dtype=int) * jp.array([0, 0, 1]),
             faces=tm.faces,
             diffuse_map=tex,
         )
@@ -125,16 +118,15 @@ def _build_objects(sys: brax.System) -> list[Obj]:
         raise RuntimeError(f'unrecognized collider: {type(col)}')
 
       i: int = col.link_idx if col.link_idx is not None else -1
-      instance = Instance(model=model)
       off = col.transform.pos
       rot = col.transform.rot
-      obj = Obj(instance=instance, link_idx=i, off=off, rot=rot)
+      obj = Obj(instance=model, link_idx=i, off=off, rot=rot)
 
       objs.append(obj)
 
   return objs
 
-def _with_state(objs: Iterable[Obj], x: brax.Transform) -> list[Instance]:
+def _with_state(objs: Iterable[Obj], x: brax.Transform) -> list[Model]:
   """x must has at least 1 element. This can be ensured by calling
     `x.concatenate(base.Transform.zero((1,)))`. x is `state.x`.
 
@@ -144,14 +136,13 @@ def _with_state(objs: Iterable[Obj], x: brax.Transform) -> list[Instance]:
   if (len(x.pos.shape), len(x.rot.shape)) != (2, 2):
     raise RuntimeError('unexpected shape in state')
 
-  instances: list[Instance] = []
+  instances: list[Model] = []
   for obj in objs:
     i = obj.link_idx
     pos = x.pos[i] + math.rotate(obj.off, x.rot[i])
     rot = math.quat_mul(x.rot[i], obj.rot)
     instance = obj.instance
-    instance = instance.replace_with_position(pos)
-    instance = instance.replace_with_orientation(rot)
+    instance.mdlMatrix = rot @ pos
     instances.append(instance)
 
   return instances
@@ -184,14 +175,6 @@ def get_camera(
   hfov = 58.0
   vfov = hfov * height / width
   target = get_target(state)
-  camera = Camera(
-      viewWidth=width,
-      viewHeight=height,
-      position=eye,
-      target=target,
-      up=up,
-      hfov=hfov,
-      vfov=vfov,
-  )
+  camera = Camera(position=eye, target=target, up=up, fov=hfov, aspect=1, near=0.1, far=10000, X=84, Y=84)
 
   return camera

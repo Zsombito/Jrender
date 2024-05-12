@@ -3,7 +3,7 @@ import jax
 import jax.numpy as jnp
 from jaxtyping import Array, Float
 from jaxtyping import jaxtyped  # pyright: ignore[reportUnknownVariableType]
-from jrenderer.object import Model
+from Jrender.jrenderer.model import Model
 
 
 with jax.ensure_compile_time_eval():
@@ -136,8 +136,9 @@ def create_cube(
     half_extents: Float[Array, "3"],
     diffuse_map,
     specular_map,
+    transform = jnp.identity(4, float)
 ):
-    return Model.create(_verts * half_extents, _normals, _faces, _uvs * 4, diffuse_map, specular_map)
+    return Model(_verts * half_extents, _normals, _faces, _uvs * 4, diffuse_map, specular_map, transform=transform)
     return Model(
         verts=_verts * half_extents,
         norms=_normals,

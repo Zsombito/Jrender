@@ -1,6 +1,6 @@
 
 from jrenderer.camera import Camera
-from jrenderer.object import Model
+from jrenderer.model import Model
 from jrenderer.scene import Scene
 from jrenderer.pipeline import Render
 from jrenderer.shader import stdVertexExtractor, stdVertexShader, stdFragmentExtractor, stdFragmentShader

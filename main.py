@@ -1,5 +1,5 @@
 from jrenderer.camera import Camera
-from jrenderer.object import Model
+from jrenderer.model import Model
 from jrenderer.scene import Scene
 from jrenderer.pipeline import Render
 from jrenderer.shader import stdVertexExtractor, stdVertexShader, stdFragmentExtractor, stdFragmentShader
@@ -44,14 +44,14 @@ diffMap = jnp.array([
 )
 specMap = jnp.array([
     [
-        [[0.05, 0.05, 0.05], [0.0, 0.0, 0.0]],
-        [[0.0, 0.0, 0.0], [0.0, 0.0, 0.0]]
+        [[0.05, 0.05, 0.05], [0.05, 0.05, 0.05]],
+        [[0.05, 0.05, 0.05], [0.05, 0.05, 0.05]]
     ]]
-)
+) * 10
 indices = jnp.array([[0, 2, 3], [0, 1, 2], ])  # pyright: ignore[reportUnknownMemberType]
 
 
-model1 = Model.create(vertices1, normals, indices, uvs, diffMap, specMap)
+model1 = Model(vertices1, normals, indices, uvs, diffMap, specMap)
 
 camera = Camera(
     position=jnp.array([-5, 5, 0]) ,
@@ -77,8 +77,9 @@ scene = Scene(camera, lights, 2, 2)
 #idx = scene.add_Model(model1)
 
 scene.changeShader(stdVertexExtractor, stdVertexShader, stdFragmentExtractor, stdFragmentShader)
-capsule = create_capsule(1.0, 0.5, 1, diffMap, specMap)
-scene.add_Model(capsule)
+capsule : Model = create_capsule(1.0, 0.5, 1, diffMap, specMap)
+idx=scene.add_Model(capsule)
+scene.transform_Model(idx, jnp.identity(4, float).at[3,0].set(0))
 
 
 

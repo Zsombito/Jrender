@@ -1,7 +1,7 @@
 import jax.experimental
 import jax.experimental.host_callback
 from .scene import Scene
-from .object import Model
+from .model import Model
 from .r_types import Float, Integer, BoolV, Position, Face, PosXNorm, Vec3f, Matrix4, Normal, UV, Array
 from jax import vmap, jit
 import jax

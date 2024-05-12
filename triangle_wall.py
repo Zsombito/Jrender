@@ -1,6 +1,6 @@
 
 from jrenderer.camera import Camera
-from jrenderer.object import Model
+from jrenderer.model import Model
 from jrenderer.scene import Scene
 from jrenderer.pipeline import Render
 from jrenderer.shader import stdVertexExtractor, stdVertexShader, stdFragmentExtractor, stdFragmentShader
@@ -45,15 +45,15 @@ uv = jnp.array([
 ])
 
 diffMap = jnp.array([[[[0, 1, 0]]]])
-spec = jnp.array([[[[0.05, 0.05, 0.05]]]]) * 0
+spec = jnp.array([[[[0.05, 0.05, 0.05]]]]) 
 diffMap2 = jnp.array([[[[1, 0, 0]]]])
 
-mdl = Model.create(vec, norm, faces, uv, diffMap, spec)
-mdl2 = Model.create(vec2, norm, faces, uv, diffMap2, spec)
+mdl = Model(vec, norm, faces, uv, diffMap, spec)
+mdl2 = Model(vec2, norm, faces, uv, diffMap2, spec)
 
 
 camera = Camera(
-    position=jnp.array([0, 5, 5]) ,
+    position=jnp.array([0, 0, 5]) ,
     target=jnp.zeros(3),
     up=jnp.array([0.0, 1.0, 0.0]),
     fov=90,
@@ -63,7 +63,7 @@ camera = Camera(
     X=1280,
     Y=720
 )
-light = Light(camera.viewMatrix, [100, 100, 100], [0.0, 0.0, 1.0, 1], 1)
+light = Light(camera.viewMatrix, [1, 1, 1], [0.0, 0.0, 1.0, 1], 0)
 lights = jnp.array([
     light.getJnpArray()])
 
