@@ -1981,7 +1981,6 @@ def create_capsule(
         )
     )
     normals = _normals[:, shuffled]
-    print(f"Verts:{verts.shape}")
     return Model(verts, normals, _faces, _uvs, diffuse_map, specular_map, transform=transform)
     return Model(
         verts=verts,

@@ -3,7 +3,7 @@ import jax
 import jax.numpy as jnp
 from jaxtyping import Array, Float
 from jaxtyping import jaxtyped  # pyright: ignore[reportUnknownVariableType]
-from Jrender.jrenderer.model import Model
+from .model import Model
 
 
 with jax.ensure_compile_time_eval():

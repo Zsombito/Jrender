@@ -426,6 +426,7 @@ class Render:
     def render_forward():
         for scene in Render.rendered_scenes:
             Render.currentScene = Render.scenes[scene]
+            print(Render.currentScene.mdlMatricies)
             with jax.named_scope("Geometry Stage:"):
                 face_mask, (pos3, norm, face), perVertexExtra, shaded_perVertexExtra = Render._geometryStage()
 

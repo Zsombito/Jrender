@@ -18,6 +18,7 @@ class Camera:
         self.X = X
         self.Y = Y
         self.updateMatricies()
+    
 
 
     def updateMatricies(self) -> None:

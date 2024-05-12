@@ -2,11 +2,17 @@
 from typing import Iterable, NamedTuple, Optional
 
 import jax
-from jax import numpy as jp
+from jax import numpy as jnp
 import numpy as onp
 
 import brax
 from brax import base, envs, math, positional
+from brax.envs.base import Env, PipelineEnv, State
+from brax.mjx.base import State as MjxState
+from brax.training.agents.ppo import train as ppo
+from brax.training.agents.ppo import networks as ppo_networks
+from brax.io import html, mjcf, model 
+
 
 import trimesh
 
@@ -17,8 +23,113 @@ from jrenderer.cube import create_cube
 from jrenderer.pipeline import Render
 from jrenderer.model import Model
 from jrenderer.scene import Scene
+from jrenderer.shader import stdVertexExtractor, stdVertexShader, stdFragmentExtractor, stdFragmentShader
+import mujoco
+from mujoco import mjx
+import mediapy as media
+
+import mujoco.testdata
 
 
 def _build_scene(sys: brax.System) -> tuple[Scene, dict[int, int]]:
+    
+    
     pass
+    
+xml = """
+<mujoco>
+  <worldbody>
+    <light name="top" pos="0 0 1"/>
+    <body name="box_and_sphere" euler="0 0 -30">
+      <joint name="swing" type="hinge" axis="1 -1 0" pos="-.2 -.2 -.2"/>
+      <geom name="red_box" type="box" size=".2 .2 .2" rgba="1 0 0 1"/>
+      <geom name="green_sphere" pos=".2 .2 .2" size=".1" rgba="0 1 0 1"/>
+    </body>
+  </worldbody>
+</mujoco>
+"""
+
+# Make model, data, and renderer
+mj_model = mujoco.MjModel.from_xml_string(xml)
+mj_data = mujoco.MjData(mj_model)
+mjx_model = mjx.put_model(mj_model)
+mjx_data = mjx.put_data(mj_model, mj_data)
+
+
+
+def _getCamera():
+    camera = Camera(
+        position=jnp.array([0, 2, 2]) ,
+        target=jnp.zeros(3),
+        up=jnp.array([0.0, 1.0, 0.0]),
+        fov=90,
+        aspect=16/9,
+        near=0.1,
+        far=10000,
+        X=1280,
+        Y=720
+    )
+    return camera
+
+def _getLight():
+    return jnp.array([[0, 10, 0, 1, 1, 1, 0]], float)
+
+
+def _build_scene(m_model : mjx.Model):
+    scene = Scene(_getCamera(), _getLight(), 1, 1)
+    scene.changeShader(stdVertexExtractor, stdVertexShader, stdFragmentExtractor, stdFragmentShader)
+    def perGeom(geom_type, geom_rbga, geom_size):
+        if geom_type == 6: #Box
+            model = create_cube(geom_size, jnp.array([[[geom_rbga[:3]]]]), jnp.array([[[[0.05, 0.05, 0.05]]]]))
+        elif geom_type == 2: #Sphere
+            model = create_capsule(geom_size[0], 0, 1, jnp.array([[[geom_rbga[:3]]]]), jnp.array([[[[0.05, 0.05, 0.05]]]]))
+        scene.add_Model(model)
+    
+    
+    for i in range(m_model.geom_rgba.shape[0]):
+        perGeom(m_model.geom_type[i], m_model.geom_rgba[i], m_model.geom_size[i])
+    
+    return scene
+
+
+def _updateScene(scene : Scene, m_data : mjx.Data):
+    def perGeom(idx, pos, rot):
+        transform = jnp.identity(4, float).at[3, :3].set(-pos)
+        rot = jnp.identity(4, float).at[0, :3].set(rot[:3]).at[1, :3].set(rot[3:6]).at[2,:3].set(rot[6:])
+        transform = transform @ rot
+        scene.transform_Model(idx, transform)
+    
+    for i in range(m_data.geom_xpos.shape[0]):
+        perGeom(i, m_data.geom_xpos[i], m_data.geom_xmat[i])
+    
+    return scene
+    
+    
+jit_step = jax.jit(mjx.step)
+duration = 3.8  # (seconds)
+framerate = 3  # (Hz)
+
+myscene = _build_scene(mjx_model)
+Render.add_Scene(myscene, "Test")
+
+frames = []
+mujoco.mj_resetData(mj_model, mj_data)
+mjx_data = mjx.put_data(mj_model, mj_data)
+while mjx_data.time < duration:
+  mjx_data = jit_step(mjx_model, mjx_data)
+  if len(frames) < mjx_data.time * framerate:
+    mj_data = mjx.get_data(mj_model, mjx_data)
+    Render.scenes["Test"] = _updateScene(Render.scenes["Test"], mj_data)
+    
+    pixels = Render.render_forward()
+    print(pixels[600, 350])
+    frames.append(pixels.astype("uint8"))
+
+
+import matplotlib.pyplot as plt
+
+plt.imshow(jnp.transpose(frames[3], [1, 0, 2]))
+for i, frame in enumerate(frames):
+    plt.imshow(jnp.transpose(frame, [1, 0, 2]))
+    plt.savefig(f"./brax_output/output{i}.png")
     
