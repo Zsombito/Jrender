@@ -58,7 +58,7 @@ mjx_data = mjx.put_data(mj_model, mj_data)
 
 
 def _getCamera():
-    camera = Camera(
+    camera = Camera.create(
         position=jnp.array([0, 2, 2]) ,
         target=jnp.zeros(3),
         up=jnp.array([0.0, 1.0, 0.0]),
@@ -76,35 +76,38 @@ def _getLight():
 
 
 def _build_scene(m_model : mjx.Model):
-    scene = Scene(_getCamera(), _getLight(), 1, 1)
-    scene.changeShader(stdVertexExtractor, stdVertexShader, stdFragmentExtractor, stdFragmentShader)
-    def perGeom(geom_type, geom_rbga, geom_size):
+    scene = Scene.create(_getCamera(), _getLight(), 1, 1)
+
+    def perGeom(geom_type, geom_rbga, geom_size, scene : Scene):
         if geom_type == 6: #Box
             model = create_cube(geom_size, jnp.array([[[geom_rbga[:3]]]]), jnp.array([[[[0.05, 0.05, 0.05]]]]))
         elif geom_type == 2: #Sphere
             model = create_capsule(geom_size[0], 0, 1, jnp.array([[[geom_rbga[:3]]]]), jnp.array([[[[0.05, 0.05, 0.05]]]]))
-        scene.add_Model(model)
+        _, scene = Scene.addModel(scene, model)
+        return scene
     
     
     for i in range(m_model.geom_rgba.shape[0]):
-        perGeom(m_model.geom_type[i], m_model.geom_rgba[i], m_model.geom_size[i])
+        scene = perGeom(m_model.geom_type[i], m_model.geom_rgba[i], m_model.geom_size[i], scene)
     
     return scene
 
 
 def _updateScene(scene : Scene, m_data : mjx.Data):
-    def perGeom(idx, pos, rot):
+    def perGeom(scene : Scene, idx, pos, rot):
         transform = jnp.identity(4, float).at[3, :3].set(-pos)
         rot = jnp.identity(4, float).at[0, :3].set(rot[:3]).at[1, :3].set(rot[3:6]).at[2,:3].set(rot[6:])
         transform = transform @ rot
-        scene.transform_Model(idx, transform)
+        return Scene.transformModel(scene, idx, transform)
     
     for i in range(m_data.geom_xpos.shape[0]):
-        perGeom(i, m_data.geom_xpos[i], m_data.geom_xmat[i])
+        scene = perGeom(scene, i, m_data.geom_xpos[i], m_data.geom_xmat[i])
     
     return scene
     
     
+Render.loadVertexShaders(stdVertexShader, stdVertexExtractor)
+Render.loadFragmentShaders(stdFragmentShader, stdFragmentExtractor)
 jit_step = jax.jit(mjx.step)
 duration = 3.8  # (seconds)
 framerate = 3  # (Hz)

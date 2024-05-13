@@ -25,8 +25,10 @@ Matrix3 = Float[Array, "3 3"]
 Position = Float[Vec4f, ""]
 Face = Integer[Vec3, ""]
 Normal = Float[Vec4f, ""]
-TextureMap = UInt8[Color, "U V"]
 UV = Float[Vec3f, ""]
+TextureMap = Float[Array, "X Y 3"]
+
+Lights = Float[Array, "7"]
 
 
 #Combined Type

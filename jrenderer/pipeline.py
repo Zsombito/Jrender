@@ -10,6 +10,7 @@ import jax.numpy as jnp
 import jax.lax as lax
 from typing import Callable, List, Tuple, Any
 from .util_functions import homogenousToCartesian
+from functools import partial
 
 
 class Render:
@@ -19,10 +20,14 @@ class Render:
     clipping_batch = 4
     currentScene : Scene = None
     rasterGrid = 50 
-    faceBatch = 1000
-    bracketBatch = 1000
+    faceBatch = 300
+    bracketBatch = 300
     fragBatch = 5
     primitiveParalell = 50000
+
+    @staticmethod
+    def loadShaders(vExtractor : Callable, vShader : Callable, fExtractor : Callable, fShader : Callable):
+        Render.v
 
     #Reset pipeline
     @staticmethod
@@ -151,10 +156,10 @@ class Render:
     
         
     @jit
-    def _applyVertexShader():
+    def _applyVertexShader(scene : Scene):
         #Extract vertex information
-        args, argAxis, face, perVertexExtra = Render.currentScene.vertexExtractor(Render.currentScene)
-        (pos, norm), shaded_PerVertexExtra = vmap(Render.currentScene.vertexShader, argAxis)(*args)
+        args, argAxis, face, perVertexExtra = Render.vertexExtractor(scene)
+        (pos, norm), shaded_PerVertexExtra = vmap(Render.vertexShader, argAxis)(*args)
         return ((pos, norm, face), perVertexExtra, shaded_PerVertexExtra)
 
         
@@ -197,7 +202,7 @@ class Render:
 
     
     @jit
-    def _geometryStage():
+    def _geometryStage(scene : Scene):
         """
         Internal function to execute the whole clipping stage, including vertex shaders, clipping and view transformation
         Return value as a tuple:
@@ -209,7 +214,7 @@ class Render:
         camera = Render.currentScene.camera 
 
         with jax.named_scope("Vertex shading"):
-            (pos, norm, face), perVertexExtra, shaded_perVertexExtra  = Render._applyVertexShader()
+            (pos, norm, face), perVertexExtra, shaded_perVertexExtra  = Render._applyVertexShader(scene )
         
         with jax.named_scope("Clipping"):
             face_mask = Render._clip(pos, face, camera.fov, camera.aspect)
@@ -383,10 +388,10 @@ class Render:
     def _fragmentShading(fragments, faces, norms, perVertexExtra, shaded_perVertexExtra):
         def mapY(fragment):
             idx = fragment[3].astype(int)
-            primitiveData, modelID = Render.currentScene.fragmentExtractor(idx, faces, norms, perVertexExtra, shaded_perVertexExtra)
+            primitiveData, modelID = Render.fragmentShaderExtractor(idx, faces, norms, perVertexExtra, shaded_perVertexExtra)
             diffText = Render.currentScene.diffuseText[modelID]
             specText = Render.currentScene.specText[modelID]
-            return Render.currentScene.fragmentShader(fragment, Render.currentScene.lights, Render.currentScene.camera.position, diffText, specText,  *primitiveData)
+            return Render.fragmentShader(fragment, Render.currentScene.lights, Render.currentScene.camera.position, diffText, specText,  *primitiveData)
         
         
         def mapX(fragments):
@@ -419,8 +424,25 @@ class Render:
 #####################################################################
 #                     Main Pipeline Control                         #
 #####################################################################
+        
+    @staticmethod
+    def concurrentPart(bracket, bracket_mask, corners, fragment, face, norm, perVertexExtra, shaded_perVertexExtra):
+        def inner(brackets, bracket_mask, corners, fragments, face, norm, perVertexExtra, shaded_perVertexExtra, i, j):
+            with jax.named_scope("Filter Brackets"):
+                curr_bracket = brackets[i, j, :, :]
+                curr_mask = bracket_mask[i, j, :, :]
+                if curr_mask.sum() == 0:
+                    return jnp.ones((Render.rasterGrid, Render.rasterGrid, 4), float) * jnp.inf
+                curr_bracket, _ = Render.arrayBatcher(Render.bracketBatch, curr_bracket[curr_mask], [], 0, corners.shape[0] - 1)
+            
+            with jax.named_scope("Rasterization"):
+                fragments = Render._rasterize(curr_bracket, i, j, corners, curr_bracket.shape[0])
 
-    
+            with jax.named_scope("Fragment shading"): #Continue from here
+                shaded_fragments = Render._fragmentShading(fragments, face, norm, perVertexExtra, shaded_perVertexExtra)
+
+            return i,j,shaded_fragments
+        return partial(inner, bracket, bracket_mask, corners, fragment, face, norm, perVertexExtra, shaded_perVertexExtra)
 
     @staticmethod
     def render_forward():
@@ -428,9 +450,8 @@ class Render:
             Render.currentScene = Render.scenes[scene]
             print(Render.currentScene.mdlMatricies)
             with jax.named_scope("Geometry Stage:"):
-                face_mask, (pos3, norm, face), perVertexExtra, shaded_perVertexExtra = Render._geometryStage()
+                face_mask, (pos3, norm, face), perVertexExtra, shaded_perVertexExtra = Render._geometryStage(Render.scenes[scene])
 
-            print(f"Amount of faces:{face.shape}")
 
             with jax.named_scope("Face filtering and batchin"):
                 face = face[face_mask, :]
@@ -439,7 +460,6 @@ class Render:
             with jax.named_scope("Create brackets"):
                 corners, brackets, bracket_mask = Render._bracketing(pos3, batchedFaces)
                 corners = corners.reshape(corners.shape[0] * corners.shape[1], 3, 3)
-                print(f"The shape of the bracket_mask:{bracket_mask.shape}")
 
             frame_buffer = jnp.zeros((brackets.shape[0] * Render.rasterGrid, brackets.shape[1] * Render.rasterGrid, 3), float)
 
@@ -457,7 +477,6 @@ class Render:
 
                     with jax.named_scope("Fragment shading"): #Continue from here
                         shaded_fragments = Render._fragmentShading(fragments, face, norm, perVertexExtra, shaded_perVertexExtra)
-                        (shaded_fragments)
 
                     with jax.named_scope("Buffer mixing"):
                         frame_buffer = Render._bufferMixing(shaded_fragments, frame_buffer, i, j)
