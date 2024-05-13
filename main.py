@@ -70,7 +70,7 @@ lights = jnp.array([
     light.getJnpArray()])
 
 scene = Scene.create(camera, lights, 2, 2)
-for i in range(15):
+for i in range(10):
     print(f"Loop: {i}/10")
     indices = jnp.append(indices, indices, 0)
 model1 = Model(vertices1, normals, indices, uvs, diffMap, specMap)

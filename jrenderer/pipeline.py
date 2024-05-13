@@ -11,6 +11,7 @@ import jax.lax as lax
 from typing import Callable, List, Tuple, Any
 from .util_functions import homogenousToCartesian
 from functools import partial
+from multiprocess import Pool
 
 
 class Render:
@@ -417,6 +418,22 @@ class Render:
         sub_area = lax.dynamic_slice(frameBuffer, [x * Render.rasterGrid, y * Render.rasterGrid, 0], [50, 50, 3])
         new_area = vmap(mapX, [0, 0])(shaded_fragments, sub_area)
         return lax.dynamic_update_slice(frameBuffer, new_area, [x * Render.rasterGrid, y * Render.rasterGrid, 0])
+
+    @jit 
+    def _bufferMixing_part_A(shaded_fragments, frameBuffer, x, y):
+        def mapY(shaded_fragment, defaultV):
+            return jnp.where(shaded_fragment[0] == jnp.inf, defaultV, shaded_fragment[1:])
+
+        def mapX(shaded_fragments, defaultVs):
+            return vmap(mapY, [0,0])(shaded_fragments, defaultVs)
+        
+        sub_area = lax.dynamic_slice(frameBuffer, [x * Render.rasterGrid, y * Render.rasterGrid, 0], [50, 50, 3])
+        return vmap(mapX, [0, 0])(shaded_fragments, sub_area)
+    
+    @jit 
+    def _applyPatches(frame_buffer, frame_patch, x, y):
+        return lax.dynamic_update_slice(frame_buffer, frame_patch, [x * Render.rasterGrid, y * Render.rasterGrid, 0])
+
             
         
 
@@ -424,25 +441,37 @@ class Render:
 #####################################################################
 #                     Main Pipeline Control                         #
 #####################################################################
-        
-    @staticmethod
-    def concurrentPart(bracket, bracket_mask, corners, fragment, face, norm, perVertexExtra, shaded_perVertexExtra):
-        def inner(brackets, bracket_mask, corners, fragments, face, norm, perVertexExtra, shaded_perVertexExtra, i, j):
-            with jax.named_scope("Filter Brackets"):
-                curr_bracket = brackets[i, j, :, :]
-                curr_mask = bracket_mask[i, j, :, :]
-                if curr_mask.sum() == 0:
-                    return jnp.ones((Render.rasterGrid, Render.rasterGrid, 4), float) * jnp.inf
-                curr_bracket, _ = Render.arrayBatcher(Render.bracketBatch, curr_bracket[curr_mask], [], 0, corners.shape[0] - 1)
-            
+    @jit
+    def _bracket_fun(Brackets, Is, Js, corners, face, norm, perVertexExtra, shaded_perVertexExtra, frame_buffer):
+        def mapedInner(curr_bracket, i, j):
             with jax.named_scope("Rasterization"):
                 fragments = Render._rasterize(curr_bracket, i, j, corners, curr_bracket.shape[0])
 
             with jax.named_scope("Fragment shading"): #Continue from here
                 shaded_fragments = Render._fragmentShading(fragments, face, norm, perVertexExtra, shaded_perVertexExtra)
 
-            return i,j,shaded_fragments
-        return partial(inner, bracket, bracket_mask, corners, fragment, face, norm, perVertexExtra, shaded_perVertexExtra)
+            with jax.named_scope("Buffer mixing"):
+                return Render._bufferMixing_part_A(shaded_fragments, frame_buffer, i, j)
+        return vmap(mapedInner, [0, 0, 0,])(Brackets, Is, Js)
+
+        
+    def _bracketing_extender(brackets, Is, Js, targetDivision):
+        extend_num = targetDivision - (brackets.shape[0] % targetDivision) 
+        brackets_extend = jnp.ones((extend_num, 1, brackets.shape[2]), int) * brackets[0, 0, 0]
+        Is_extend = jnp.ones(extend_num, int) * Is[0]
+        Js_extend = jnp.ones(extend_num, int) * Js[0]
+        brackets = jnp.append(brackets_extend, brackets, 0)
+        Is = jnp.append(Is_extend, Is, 0)
+        Js = jnp.append(Js_extend, Js, 0)
+        return brackets, Is, Js
+
+            
+
+
+
+
+    
+
 
     @staticmethod
     def render_forward():
@@ -463,23 +492,47 @@ class Render:
 
             frame_buffer = jnp.zeros((brackets.shape[0] * Render.rasterGrid, brackets.shape[1] * Render.rasterGrid, 3), float)
 
+            batches = []
+            max_element = 0
+            
             for i in range(brackets.shape[0]):
                 for j in range(brackets.shape[1]):
                     with jax.named_scope("Filter Brackets"):
-                        curr_bracket = brackets[i, j, :, :]
                         curr_mask = bracket_mask[i, j, :, :]
+                        elements = curr_mask.sum() 
                         if curr_mask.sum() == 0:
                             continue
-                        curr_bracket, _ = Render.arrayBatcher(Render.bracketBatch, curr_bracket[curr_mask], [], 0, corners.shape[0] - 1)
-                    
-                    with jax.named_scope("Rasterization"):
-                        fragments = Render._rasterize(curr_bracket, i, j, corners, curr_bracket.shape[0])
+                        if elements > max_element:
+                            max_element = elements
+                        batches.append((i, j, curr_mask))
+                        #curr_bracket, _ = Render.arrayBatcher(Render.bracketBatch, curr_bracket[curr_mask], [], 0, corners.shape[0] - 1)
+            filtered_brackets, Is, Js = [], [], []
+            if max_element % Render.bracketBatch == 0:
+                batch = max_element // Render.bracketBatch 
+            else:
+                batch = max_element // Render.bracketBatch  + 1
+                
+            for i, j, curr_mask in batches:
+                curr_bracket = brackets[i, j, :, :]
+                curr_bracket, _ = Render.arrayBatcher(Render.bracketBatch * batch, curr_bracket[curr_mask], [], 0, corners.shape[0] - 1)
+                filtered_brackets.append(curr_bracket)
+                Is.append(i)
+                Js.append(j)
+            
+            filtered_brackets = jnp.array(filtered_brackets)
+            Is = jnp.array(Is, int)
+            Js = jnp.array(Js, int)
+            filtered_brackets, Is, Js = Render._bracketing_extender(filtered_brackets, Is, Js, 7)
 
-                    with jax.named_scope("Fragment shading"): #Continue from here
-                        shaded_fragments = Render._fragmentShading(fragments, face, norm, perVertexExtra, shaded_perVertexExtra)
+            frame_patches = Render._bracket_fun(filtered_brackets, Is, Js, corners, face, norm, perVertexExtra, shaded_perVertexExtra, frame_buffer)
 
-                    with jax.named_scope("Buffer mixing"):
-                        frame_buffer = Render._bufferMixing(shaded_fragments, frame_buffer, i, j)
+            for i in range(frame_patches.shape[0]):
+                frame_buffer = Render._applyPatches(frame_buffer, frame_patches[i], Is[i], Js[i])
+
+
+                
+
+            
 
             frame_buffer = frame_buffer * 255
             return frame_buffer[:Render.currentScene.camera.X, :Render.currentScene.camera.Y, :].astype(int)
@@ -528,6 +581,7 @@ class Render:
 
                     with jax.named_scope("Buffer mixing"):
                         frame_buffer = Render._bufferMixing(shaded_fragments, frame_buffer, i, j)
+            
 
             frame_buffer = frame_buffer * 255
             return frame_buffer[:Render.currentScene.camera.X, :Render.currentScene.camera.Y, :].astype(int)
