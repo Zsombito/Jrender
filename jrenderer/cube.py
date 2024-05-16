@@ -4,9 +4,18 @@ import jax.numpy as jnp
 from jaxtyping import Array, Float
 from jaxtyping import jaxtyped  # pyright: ignore[reportUnknownVariableType]
 from .model import Model
+from .util_functions import homogenousToCartesian
 
 
-with jax.ensure_compile_time_eval():
+
+
+def create_cube(
+    half_extents: Float[Array, "3"],
+    diffuse_map,
+    specular_map,
+    object_transform = jnp.identity(4, float),
+    transform = jnp.identity(4, float)
+):
     _verts = jnp.array(  # pyright: ignore[reportUnknownMemberType]
         (
             # back
@@ -130,15 +139,9 @@ with jax.ensure_compile_time_eval():
             (20, 22, 23),
         )
     )
-
-
-def create_cube(
-    half_extents: Float[Array, "3"],
-    diffuse_map,
-    specular_map,
-    transform = jnp.identity(4, float)
-):
-    return Model(_verts * half_extents, _normals, _faces, _uvs * 4, diffuse_map, specular_map, transform=transform)
+    vertecies = jnp.apply_along_axis(lambda x : jnp.array([*x, 1.0]), 1, _verts * half_extents)
+    normals = jnp.apply_along_axis(lambda x : jnp.array([*x, 1.0]), 1, _normals)
+    return Model((vertecies @ object_transform)[:, :3], (normals @ object_transform)[:, :3], _faces, _uvs * 4, diffuse_map, specular_map, transform=transform)
     return Model(
         verts=_verts * half_extents,
         norms=_normals,

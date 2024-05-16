@@ -3,7 +3,30 @@ import jax
 import jax.numpy as jnp
 from .model import Model
 
-with jax.ensure_compile_time_eval():
+
+
+
+def create_capsule(
+    radius,
+    half_height,
+    up_axis,
+    diffuse_map,
+    specular_map,
+    object_transform = jnp.identity(4, float),
+    transform = jnp.identity(4, float)
+):
+    """Create a capsule model.
+
+    Parameters:
+      - radius: The radius of the capsule.
+      - half_height: Half the height of the capsule.
+      - up_axis: The axis that points up
+      - diffuse_map: The diffuse map.
+      - specular_map: The specular map.
+
+    Reference:
+      - [create_capsule](https://github.com/erwincoumans/tinyrenderer/blob/89e8adafb35ecf5134e7b17b71b0f825939dc6d9/tinyrenderer.cpp#L914)
+    """
     _verts  = jnp.array(  # pyright: ignore[reportUnknownMemberType]
         (
             (0.000000, 0.879385, 0.500000),
@@ -1941,29 +1964,6 @@ with jax.ensure_compile_time_eval():
         )
     )
 
-
-
-
-def create_capsule(
-    radius,
-    half_height,
-    up_axis,
-    diffuse_map,
-    specular_map,
-    transform = jnp.identity(4, float)
-):
-    """Create a capsule model.
-
-    Parameters:
-      - radius: The radius of the capsule.
-      - half_height: Half the height of the capsule.
-      - up_axis: The axis that points up
-      - diffuse_map: The diffuse map.
-      - specular_map: The specular map.
-
-    Reference:
-      - [create_capsule](https://github.com/erwincoumans/tinyrenderer/blob/89e8adafb35ecf5134e7b17b71b0f825939dc6d9/tinyrenderer.cpp#L914)
-    """
     shuffled = jnp.array(  # pyright: ignore[reportUnknownMemberType]
         (
             (1, 2, 0),
@@ -1981,7 +1981,9 @@ def create_capsule(
         )
     )
     normals = _normals[:, shuffled]
-    return Model(verts, normals, _faces, _uvs, diffuse_map, specular_map, transform=transform)
+    vertecies = jnp.apply_along_axis(lambda x : jnp.array([*x, 1.0]), 1, verts )
+    normals = jnp.apply_along_axis(lambda x : jnp.array([*x, 1.0]), 1, normals)
+    return Model((vertecies @ object_transform)[:, :3], (normals @ object_transform)[:, :3], _faces, _uvs, diffuse_map, specular_map, transform=transform)
     return Model(
         verts=verts,
         norms=normals,

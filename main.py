@@ -1,7 +1,7 @@
 from jrenderer.camera import Camera
 from jrenderer.model import Model
 from jrenderer.scene import Scene
-from jrenderer.pipeline import Render
+from jrenderer.pipeline_without_filtering import Render
 from jrenderer.shader import stdVertexExtractor, stdVertexShader, stdFragmentExtractor, stdFragmentShader
 from jrenderer.lights import Light
 from jrenderer.capsule import create_capsule
@@ -77,8 +77,8 @@ model1 = Model(vertices1, normals, indices, uvs, diffMap, specMap)
 
 #idx = scene.add_Model(model1)
 
-capsule : Model = create_cube(1.0, diffMap, specMap)
-idx, scene =Scene.addModel(scene, model1)
+capsule : Model = create_capsule(1.0, 0.5, 1, diffMap, specMap)
+idx, scene =Scene.addModel(scene, capsule)
 
 
 
