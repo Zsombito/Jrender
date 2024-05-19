@@ -18,163 +18,231 @@ from jrenderer.model import Model
 from jrenderer.scene import Scene
 
 
-canvas_width: int = 84 #@param {type:"integer"}
-canvas_height: int = 84 #@param {type:"integer"}
+from typing import Iterable, NamedTuple, Optional
 
-def grid(grid_size: int, color) -> jp.ndarray:
-  grid = onp.zeros((grid_size, grid_size, 3), dtype=onp.single)
-  grid[:, :] = onp.array(color) / 255.0
-  grid[0] = onp.zeros((grid_size, 3), dtype=onp.single)
-  # to reverse texture along y direction
-  grid[:, -1] = onp.zeros((grid_size, 3), dtype=onp.single)
-  return jp.asarray(grid)
+import jax
+from jax import numpy as jnp
+import numpy as np
+from jaxtyping import Float, Integer, Array
 
-_GROUND: jp.ndarray = grid(100, [200, 200, 200])
+import brax
+from brax import base, envs, math, positional
+from brax.envs.base import Env, PipelineEnv, State
+from brax.envs import humanoid
+from brax.mjx.base import State as MjxState
+from brax.training.agents.ppo import train as ppo
+from brax.training.agents.ppo import networks as ppo_networks
+from brax.io import html, mjcf, model 
 
-class Obj(NamedTuple):
-  """An object to be rendered in the scene.
 
-  Assume the system is unchanged throughout the rendering.
+import trimesh
 
-  col is accessed from the batched geoms `sys.geoms`, representing one geom.
-  """
-  instance: Model
-  """An instance to be rendered in the scene, defined by jaxrenderer."""
-  link_idx: int
-  """col.link_idx if col.link_idx is not None else -1"""
-  off: jp.ndarray
-  """col.transform.rot"""
-  rot: jp.ndarray
-  """col.transform.rot"""
+from jrenderer.camera import Camera
+from jrenderer.lights import Light
+from jrenderer.capsule import create_capsule
+from jrenderer.cube import create_cube
+from jrenderer.pipeline import Render
+from jrenderer.model import Model
+from jrenderer.scene import Scene
+from jrenderer.shader import stdVertexExtractor, stdVertexShader, stdFragmentExtractor, stdFragmentShader
+import mujoco
+from mujoco import mjx
+import mediapy as media
 
-def _build_objects(sys: brax.System) -> list[Obj]:
-  """Converts a brax System to a list of Obj."""
-  objs: list[Obj] = []
+import mujoco.testdata
 
-  def take_i(obj, i):
-    return jax.tree_map(lambda x: jp.take(x, i, axis=0), obj)
+import time
 
-  link_names: list[str]
-  link_names = [n or f'link {i}' for i, n in enumerate(sys.link_names)]
-  link_names += ['world']
-  link_geoms: dict[str, list[Any]] = {}
-  for batch in sys.geoms:
-    num_geoms = len(batch.friction)
-    for i in range(num_geoms):
-      link_idx = -1 if batch.link_idx is None else batch.link_idx[i]
-      link_geoms.setdefault(link_names[link_idx], []).append(take_i(batch, i))
+class GeomOffset(NamedTuple):
+    rot : Float[Array, "4"]
+    off : Float[Array, "3"]
+    link_idx : int
+    model_idx : int
 
-  for _, geom in link_geoms.items():
-    for col in geom:
-      tex = col.rgba[:3].reshape((1, 1, 3))
-      # reference: https://github.com/erwincoumans/tinyrenderer/blob/89e8adafb35ecf5134e7b17b71b0f825939dc6d9/model.cpp#L215
-      specular_map = jax.lax.full(tex.shape[:2], 2.0)
+    def _transform(self, rot : Float[Array, "4"], pos : Float[Array, "3"]):
+        new_off = pos + math.rotate(self.off, rot)
+        new_rot = math.quat_mul(self.rot, rot)
+        return GeomOffset(new_rot, new_off, self.link_idx, self.model_idx)
 
-      if isinstance(col, base.Capsule):
-        half_height = col.length / 2
-        model = create_capsule(
-          radius=col.radius,
-          half_height=half_height,
-          up_axis=2,
-          diffuse_map=tex,
-          specular_map=specular_map,
-        )
-      elif isinstance(col, base.Box):
-        model = create_cube(
-          half_extents=col.halfsize,
-          diffuse_map=tex,
-          texture_scaling=jp.array(16.),
-          specular_map=specular_map,
-        )
-      elif isinstance(col, base.Sphere):
-        model = create_capsule(
-          radius=col.radius,
-          half_height=jp.array(0.),
-          up_axis=2,
-          diffuse_map=tex,
-          specular_map=specular_map,
-        )
-      elif isinstance(col, base.Plane):
-        tex = _GROUND
-        model = create_cube(
-          half_extents=jp.array([1000.0, 1000.0, 0.0001]),
-          diffuse_map=tex,
-          texture_scaling=jp.array(8192.),
-          specular_map=specular_map,
-        )
-      elif isinstance(col, base.Convex):
-        # convex objects are not visual
-        continue
-      elif isinstance(col, base.Mesh):
-        tm = trimesh.Trimesh(vertices=col.vert, faces=col.face)
-        model = Model.create(
-            vertecies=tm.vertices,
-            normals=tm.vertex_normals,
-            uvs=jp.ones((tm.vertices.shape[0], 3), dtype=int) * jp.array([0, 0, 1]),
-            faces=tm.faces,
-            diffuse_map=tex,
-        )
-      else:
-        raise RuntimeError(f'unrecognized collider: {type(col)}')
+def _convertBodyNames(body_adr : np.ndarray, names : bytes) -> list[str]:
+    body_names : list[str] = []
+    for adr in body_adr:
+        end = adr
+        while(names[end] != 0):
+            end += 1
+        body_names.append(names[adr:end].decode())
+    return body_names
 
-      i: int = col.link_idx if col.link_idx is not None else -1
-      off = col.transform.pos
-      rot = col.transform.rot
-      obj = Obj(instance=model, link_idx=i, off=off, rot=rot)
+def _calculateBodyOffset(sys : brax.System, body_idx : int):
+    if sys.body_parentid[body_idx] == 0:
+        return jnp.zeros(3, float), jnp.zeros(4, float).at[0].set(1.)
+    else:
+        parent_off, parent_rot =  _calculateBodyOffset(sys, sys.body_parentid[body_idx])
+        off = sys.body_pos[body_idx] + parent_off
+        rot = math.quat_mul(parent_rot, sys.body_quat[body_idx])
+        return  off, rot
 
-      objs.append(obj)
+def _addBodytoScene(scene : Scene, sys : brax.System, body_idx : int, link_idx : int) -> tuple[Scene, list[GeomOffset]]:
+    body_off, body_rot = _calculateBodyOffset(sys, body_idx)
+    extra_geom_datas : list[GeomOffset] = []
+    for i in range(sys.body_geomnum[body_idx]):
+        geom_idx = sys.body_geomadr[body_idx] + i
 
-  return objs
 
-def _with_state(objs: Iterable[Obj], x: brax.Transform) -> list[Model]:
-  """x must has at least 1 element. This can be ensured by calling
-    `x.concatenate(base.Transform.zero((1,)))`. x is `state.x`.
+        geom_type = sys.geom_type[geom_idx]
+        if geom_type == 6: #Box
+            model = create_cube(sys.geom_size[geom_idx][0], jnp.array([[[sys.geom_rgba[geom_idx][:3]]]]), jnp.array([[[[0.05, 0.05, 0.05]]]]))
+        elif geom_type == 2: #Sphere
+            model = create_capsule(sys.geom_size[geom_idx][0], 0, 2, jnp.array([[[sys.geom_rgba[geom_idx][:3]]]]), jnp.array([[[[0.05, 0.05, 0.05]]]]))
+        elif geom_type == 3: #Capsule
+            if sys.geom_size[geom_idx].shape[0] == 1:
+                model = create_capsule(sys.geom_size[geom_idx][0], 1 * sys.geom_size[geom_idx][0], 2, jnp.array([[[sys.geom_rgba[geom_idx][:3]]]]), jnp.array([[[[0.05, 0.05, 0.05]]]]))
+            else:
+                model = create_capsule(sys.geom_size[geom_idx][0], sys.geom_size[geom_idx][1], 2, jnp.array([[[sys.geom_rgba[geom_idx][:3]]]]), jnp.array([[[[0.05, 0.05, 0.05]]]]))
+                
+        else:
+            continue
+        
+        model_idx, scene = scene.addModel(model)
 
-    This function does not modify any inputs, rather, it produces a new list of
-    `Instance`s.
-  """
-  if (len(x.pos.shape), len(x.rot.shape)) != (2, 2):
-    raise RuntimeError('unexpected shape in state')
+        geom_off = sys.geom_pos[geom_idx] + body_off
+        geom_rot = math.quat_mul(body_rot, sys.geom_quat[geom_idx])
+        print(f"Geom{i}: {geom_off} off, {body_rot} -> {geom_rot} rot")
+        extra_geom_datas.append(GeomOffset(geom_rot, geom_off, link_idx, model_idx))
 
-  instances: list[Model] = []
-  for obj in objs:
-    i = obj.link_idx
-    pos = x.pos[i] + math.rotate(obj.off, x.rot[i])
-    rot = math.quat_mul(x.rot[i], obj.rot)
-    instance = obj.instance
-    instance.mdlMatrix = rot @ pos
-    instances.append(instance)
+    return scene, extra_geom_datas
 
-  return instances
 
-def _eye(sys: brax.System, state: brax.State) -> jp.ndarray:
-  """Determines the camera location for a Brax system."""
-  xj = state.x.vmap().do(sys.link.joint)
-  dist = jp.concatenate(xj.pos[None, ...] - xj.pos[:, None, ...])
-  dist = jp.linalg.norm(dist, axis=1).max()
-  off = jp.array([2 * dist, -2 * dist, dist])
+def buildScene(sys : brax.System) -> tuple[Scene, list[GeomOffset]]:
+    scene = Scene.create(_getCamera(), _getLight(), 1, 1)
+    body_names = _convertBodyNames(sys.name_bodyadr, sys.names)
+    geom_offsets : list[GeomOffset] = []
+    for i in range(sys.nbody):
+        link_idx = -1
+        for j, link_name in enumerate(sys.link_names):
+            if link_name == body_names[i]:
+                link_idx = j
+                break
+        
+        print("---------------------")
+        print(f"{body_names[i]}")
+        print(f"Body offset: {_calculateBodyOffset(sys, i)}")
+        print("Geoms:")
+        scene, new_geom_offsets = _addBodytoScene(scene, sys, i, link_idx)
+        print("--------------------------------------")
+        geom_offsets = geom_offsets + new_geom_offsets
+    
+    return scene, geom_offsets
 
-  return state.x.pos[0, :] + off
+def applyGeomOffsets(scene : Scene, geom_offsets : list[GeomOffset]) -> Scene:
+    for geom_offset in geom_offsets:
+        transition_matrix = jnp.identity(4, float).at[3, :3].set(geom_offset.off)
+        rotation_matrix = jnp.identity(4,float).at[:3, :3].set(jnp.transpose(math.quat_to_3x3(geom_offset.rot)))
+        scene = scene.transformModel(geom_offset.model_idx, rotation_matrix @ transition_matrix)
+    
+    return scene
 
-def _up(unused_sys: brax.System) -> jp.ndarray:
-  """Determines the up orientation of the camera."""
-  return jp.array([0., 0., 1.])
 
-def get_target(state: brax.State) -> jp.ndarray:
-  """Gets target of camera."""
-  return jp.array([state.x.pos[0, 0], state.x.pos[0, 1], 0])
+def _getCamera():
+    camera = Camera.create(
+        position=jnp.array([3, 0, 0.0]) ,
+        target=jnp.zeros(3),
+        up=jnp.array([0, 0.0, 1.0]),
+        fov=75,
+        aspect=16/9,
+        near=0.1,
+        far=10000,
+        X=1280,
+        Y=720
+    )
+    return camera
 
-def get_camera(
-    sys: brax.System,
-    state: brax.State,
-    width: int = canvas_width,
-    height: int = canvas_height,
-) -> Camera:
-  """Gets camera object."""
-  eye, up = _eye(sys, state), _up(sys)
-  hfov = 58.0
-  vfov = hfov * height / width
-  target = get_target(state)
-  camera = Camera(position=eye, target=target, up=up, fov=hfov, aspect=1, near=0.1, far=10000, X=84, Y=84)
+def _getLight():
+    return jnp.array([[0, 0, 13000, 1, 1, 1, 0]], float)
 
-  return camera
+
+def _build_scene(m_model : brax.System):
+    scene = Scene.create(_getCamera(), _getLight(), 1, 1)
+
+    def perGeom(geom_type, geom_rbga, geom_size, geom_pos, geom_quat, scene : Scene):
+        transform = jnp.identity(4, float).at[3, :3].set(-geom_pos)
+        print(geom_type)
+        print(geom_quat)
+        if geom_type == 6: #Box
+            model = create_cube(geom_size[0], jnp.array([[[[0, 1, 0]]]]), jnp.array([[[[0.05, 0.05, 0.05]]]]), transform)
+        elif geom_type == 2: #Sphere
+            model = create_capsule(geom_size[0], 0, 1, jnp.array([[[[1., 0.0, 0.0]]]]), jnp.array([[[[0.05, 0.05, 0.05]]]]), transform)
+        elif geom_type == 3: #Capusule
+            print(geom_size[1]/2)
+            model = create_capsule(geom_size[0], geom_size[1], 2, jnp.array([[[[1,1,1]]]]), jnp.array([[[[0.05, 0.05, 0.05]]]]), transform)
+        else:
+            return scene
+        _, scene = Scene.addModel(scene, model)
+        return scene
+    
+    
+    for i in range(m_model.geom_rgba.shape[0]):
+        print(m_model.geom_bodyid[i])
+        scene = perGeom(m_model.geom_type[i], m_model.geom_rgba[i], m_model.geom_size[i], m_model.geom_pos[i], m_model.geom_quat[i],scene)
+    
+    return scene
+
+
+def _updateScene(scene : Scene, m_data : mjx.Data):
+    def perGeom(scene : Scene, idx, pos, rot):
+        transform = jnp.identity(4, float).at[3, :3].set(-pos)
+        rot = jnp.identity(4, float).at[0, :3].set([-rot[0], -rot[1], -rot[2]]).at[1, :3].set([-rot[3], -rot[4], -rot[5]]).at[2,:3].set([-rot[6], -rot[7], -rot[8]])
+        transform = transform @ rot
+        return Scene.transformModel(scene, idx, transform)
+    
+    for i in range(m_data.geom_xpos.shape[0]):
+        scene = perGeom(scene, i, m_data.geom_xpos[i], m_data.geom_xmat[i])
+    
+    return scene
+
+
+
+    
+    
+Render.loadVertexShaders(stdVertexShader, stdVertexExtractor)
+Render.loadFragmentShaders(stdFragmentShader, stdFragmentExtractor)
+
+human = humanoid.Humanoid()
+
+#scene = _build_scene(human.sys)
+#Render.add_Scene(scene, "Test")
+#pixels = jnp.transpose(Render.render_forward(), [1, 0, 2])
+#end = time.time_ns()
+#pixels = pixels.astype("uint8")
+
+#import matplotlib.pyplot as plt
+
+#plt.imshow(pixels)
+#plt.savefig('humanoid.png')  # pyright: ignore[reportUnknownMemberType]
+
+#print(human.sys.link_names)
+#print(human.sys.ngeom)
+#print(human.sys.nbody)
+#print(human.sys.link_types)
+#print(human.sys.geom_bodyid)
+#print(human.sys.body_pos)
+#print(human.sys.geom_pos)
+#print(human.sys.body_parentid)
+#print(human.sys.link_parents)
+#print(human.sys.body_geomnum)
+#print(human.sys.njnt)
+#print(human.sys.body_geomadr)
+#human.step
+
+scene, geom_offsets = buildScene(human.sys)
+scene = applyGeomOffsets(scene, geom_offsets)
+
+
+Render.add_Scene(scene, "Test")
+pixels = jnp.transpose(Render.render_forward(), [1, 0, 2])
+pixels = pixels.astype("uint8")
+
+import matplotlib.pyplot as plt
+
+plt.imshow(pixels)
+plt.savefig('humanoid.png')  # pyright: ignore[reportUnknownMemberType]

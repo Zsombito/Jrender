@@ -55,7 +55,7 @@ indices = jnp.array([[0, 2, 3], [0, 1, 2], ])  # pyright: ignore[reportUnknownMe
 model1 = Model(vertices1, normals, indices, uvs, diffMap, specMap)
 
 camera = Camera.create(
-    position=jnp.array([-5, 5, 0]) ,
+    position=jnp.array([-2, 2, 0]) ,
     target=jnp.zeros(3),
     up=jnp.array([0.0, 1.0, 0.0]),
     fov=90,
@@ -77,7 +77,7 @@ model1 = Model(vertices1, normals, indices, uvs, diffMap, specMap)
 
 #idx = scene.add_Model(model1)
 
-capsule : Model = create_capsule(1.0, 0.5, 1, diffMap, specMap)
+capsule : Model = create_capsule(0.05, 0.225, 1, diffMap, specMap)
 idx, scene =Scene.addModel(scene, capsule)
 
 
@@ -101,13 +101,13 @@ Render.loadFragmentShaders(stdFragmentShader, stdFragmentExtractor)
 
 import matplotlib.pyplot as plt
 
-Render.scenes["MyScene"] = Scene.transformModel(Render.scenes["MyScene"], idx, jnp.identity(4, float).at[3,1].set(2))
+Render.scenes["MyScene"] = Scene.transformModel(Render.scenes["MyScene"], idx, jnp.identity(4, float).at[3,1].set(0.2))
 frame_buffer =Render.render_forward()
 print(frame_buffer.shape)
 plt.imshow(jnp.transpose(frame_buffer, [1, 0, 2]))
 plt.savefig('output.png')  # pyright: ignore[reportUnknownMemberType]
 
-Render.scenes["MyScene"] = Scene.transformModel(Render.scenes["MyScene"], idx, jnp.identity(4, float).at[3,1].set(-2))
+Render.scenes["MyScene"] = Scene.transformModel(Render.scenes["MyScene"], idx, jnp.identity(4, float).at[3,1].set(-0.2))
 with jax.profiler.trace("./jax-trace-full"):
     frame_buffer =Render.render_forward()
 plt.imshow(jnp.transpose(frame_buffer, [1, 0, 2]))
