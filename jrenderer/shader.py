@@ -2,6 +2,7 @@ from jax import jit, vmap
 from .r_types import Position, Normal, Face, UV, Matrix4, Float, Integer, Array
 from .scene import Scene
 from .model import Model
+from .camera import Camera
 from .util_functions import normalise, homogenousToCartesian
 from typing import Callable
 import jax.numpy as jnp
@@ -18,7 +19,7 @@ def stdVertexShader(position : Position, normal : Normal, uv, modelID, mdlMatric
 
     
 #Standard Vertex Info extractor (pos, normal, modelID)
-def stdVertexExtractor(scene : Scene):
+def stdVertexExtractor(scene : Scene, camera : Camera):
     pos : Float[Position, "idx"] = scene.vertecies
     norm : Float[Normal, "idx"] = scene.normals
     modelID : Integer[Array, "1"]= scene.modelID
@@ -28,7 +29,7 @@ def stdVertexExtractor(scene : Scene):
     modelMatricies = scene.mdlMatricies
     
 
-    return ((pos, norm, uv, modelIDperVertex, modelMatricies, scene.camera.viewMatrix, scene.camera.projection), [0, 0, 0, 0, None, None, None], face, [modelID])
+    return ((pos, norm, uv, modelIDperVertex, modelMatricies, camera.viewMatrix, camera.projection), [0, 0, 0, 0, None, None, None], face, [modelID])
 
 
 @jit

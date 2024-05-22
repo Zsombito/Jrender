@@ -6,7 +6,7 @@ from jax import numpy as jp
 import numpy as onp
 
 import brax
-from brax import base, envs, math
+from brax import math
 
 import trimesh
 
@@ -42,7 +42,7 @@ from jrenderer.camera import Camera
 from jrenderer.lights import Light
 from jrenderer.capsule import create_capsule
 from jrenderer.cube import create_cube
-from jrenderer.pipeline_without_filtering import Render
+from jrenderer.pipeline_brax_without_clipping import Render
 from jrenderer.model import Model
 from jrenderer.scene import Scene
 from jrenderer.shader import stdVertexExtractor, stdVertexShader, stdFragmentExtractor, stdFragmentShader
@@ -77,7 +77,7 @@ def _calculateBodyOffset(sys : brax.System, body_idx : int):
 
 
 def buildScene(sys : brax.System) -> tuple[Scene, list[GeomOffset]]:
-    scene = Scene.create(_getCamera(), _getLight(), 1, 1)
+    scene = Scene.create(_getLight(), 1, 1)
     geom_offsets : list[GeomOffset] = []
     for geom_idx in range(sys.ngeom):
         geom_type = sys.geom_type[geom_idx]
@@ -148,12 +148,7 @@ human = ant.Ant()
 
 scene, geom_offsets = buildScene(human.sys)
 scene = applyGeomOffsets(scene, geom_offsets)
-
-
-Render.add_Scene(scene, "Test")
-pixels = jnp.transpose(Render.render_forward(), [1, 0, 2])
-pixels = pixels.astype("uint8")
-
+camera = _getCamera()
 
 import pickle
 
@@ -165,10 +160,10 @@ print(states[80].pipeline_state.x.pos[3])
 frames = []
 
 for i in range(40):
-    curr_geom_offsets = updateGeomData(geom_offsets, states[i].pipeline_state)
-    Render.scenes["Test"] = applyGeomOffsets(scene, curr_geom_offsets)
     start = time.time_ns()
-    pixels = jnp.transpose(Render.render_forward(), [1, 0, 2])
+    curr_geom_offsets = updateGeomData(geom_offsets, states[i].pipeline_state)
+    scene = applyGeomOffsets(scene, curr_geom_offsets)
+    pixels = jnp.transpose(Render.render_forward(scene, camera), [1, 0, 2])
     end = time.time_ns()
     print(f"Frame{i} took: {(end - start) / 1000 / 1000} ms")
     pixels = pixels.astype("uint8")

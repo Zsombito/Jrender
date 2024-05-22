@@ -5,6 +5,7 @@ import jax.numpy as jnp
 from typing import cast
 import jax.lax as lax
 from jax import jit
+from jaxtyping import Array, Integer, Float
 
 
 #class Camera:
@@ -73,6 +74,9 @@ class Camera(NamedTuple):
     projection : Matrix4
     transformMatrix : Matrix4
     viewPortMatrix : Matrix4
+    pixelsX : Integer[Array, "X"]
+    pixelsY : Integer[Array, "Y"]
+    defaultFrame : Float[Array, "X Y 3"]
 
     def create( position : Vec3f, target : Vec3f, up : Vec3f, fov : float, aspect : float, near : float, far : float, X:int , Y: int):
         forward : Vec3f = normalise(target - position)
@@ -107,5 +111,9 @@ class Camera(NamedTuple):
             .at[3,0].set(X / 2)
             .at[1, 1].set(-Y / 2)
             .at[3,1].set(Y / 2))
-        return Camera(position, target, up, fov, aspect, near, far, X, Y, viewMatrix, projection, transformMatrix, viewPortMatrix)
+        
+        
+        frame_buffer = jnp.zeros((X, Y, 3), float)
+        pixelsX, pixelsY = lax.iota(int, X), lax.iota(int, Y)
+        return Camera(position, target, up, fov, aspect, near, far, X, Y, viewMatrix, projection, transformMatrix, viewPortMatrix, pixelsX, pixelsY, frame_buffer)
 
