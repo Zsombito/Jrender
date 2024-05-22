@@ -3,3 +3,4 @@ jax-trace
 jax-trace*
 *.png
 brax_output
+*.pkl
