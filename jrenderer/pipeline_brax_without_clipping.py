@@ -305,7 +305,7 @@ class Render:
             return None, selected_fragments
         
 
-        _, selected_frags = lax.scan(_perRow, None, gridX, unroll=100)
+        _, selected_frags = lax.scan(_perRow, None, gridX, unroll=10)
         return selected_frags
 
 

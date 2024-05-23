@@ -74,11 +74,11 @@ class BraxRenderer(NamedTuple):
             target=jnp.zeros(3),
             up=jnp.array([0, 0.0, 1.0]),
             fov=75,
-            aspect=1920/1080,
+            aspect=520/360,
             near=0.1,
             far=10000,
-            X=1920,
-            Y=1080
+            X=260,
+            Y=180
         )
         return camera
 
@@ -131,7 +131,7 @@ class BraxRenderer(NamedTuple):
     def renderState(self, state : brax.State):
         new_mdl_matricies = jax.vmap(BraxRenderer._perGeomUpdate, [0, 0, 0, None, None])(self.geom_offset, self.geom_rotation, self.geom_link_idx, state.x.pos, state.x.rot)
         scene = self.scene._replace(mdlMatricies=new_mdl_matricies)
-        return Render.render_forward(scene, self.cameras[0])
+        return jnp.transpose(Render.render_forward(scene, self.cameras[0]), [1,0,2]).astype("uint8")
         
 
     

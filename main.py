@@ -1,7 +1,7 @@
 from jrenderer.camera import Camera
 from jrenderer.model import Model
 from jrenderer.scene import Scene
-from jrenderer.pipeline_without_filtering import Render
+from jrenderer.pipeline_brax_without_clipping import Render
 from jrenderer.shader import stdVertexExtractor, stdVertexShader, stdFragmentExtractor, stdFragmentShader
 from jrenderer.lights import Light
 from jrenderer.capsule import create_capsule
@@ -69,11 +69,11 @@ light = Light(camera.viewMatrix, [1, 1, 1], [50.0, 150.0, 100.0, 1], 0)
 lights = jnp.array([
     light.getJnpArray()])
 
-scene = Scene.create(camera, lights, 2, 2)
-for i in range(10):
-    print(f"Loop: {i}/10")
-    indices = jnp.append(indices, indices, 0)
-model1 = Model(vertices1, normals, indices, uvs, diffMap, specMap)
+scene = Scene.create(lights, 2, 2)
+#for i in range(10):
+    #print(f"Loop: {i}/10")
+    #indices = jnp.append(indices, indices, 0)
+#model1 = Model(vertices1, normals, indices, uvs, diffMap, specMap)
 
 #idx = scene.add_Model(model1)
 
@@ -82,7 +82,6 @@ idx, scene =Scene.addModel(scene, capsule)
 
 
 
-Render.add_Scene(scene, "MyScene")
 Render.loadVertexShaders(stdVertexShader, stdVertexExtractor)
 Render.loadFragmentShaders(stdFragmentShader, stdFragmentExtractor)
 
@@ -101,14 +100,6 @@ Render.loadFragmentShaders(stdFragmentShader, stdFragmentExtractor)
 
 import matplotlib.pyplot as plt
 
-Render.scenes["MyScene"] = Scene.transformModel(Render.scenes["MyScene"], idx, jnp.identity(4, float).at[3,1].set(0.2))
-frame_buffer =Render.render_forward()
-print(frame_buffer.shape)
+frame_buffer =Render.render_forward(scene, camera)
 plt.imshow(jnp.transpose(frame_buffer, [1, 0, 2]))
 plt.savefig('output.png')  # pyright: ignore[reportUnknownMemberType]
-
-Render.scenes["MyScene"] = Scene.transformModel(Render.scenes["MyScene"], idx, jnp.identity(4, float).at[3,1].set(-0.2))
-with jax.profiler.trace("./jax-trace-full"):
-    frame_buffer =Render.render_forward()
-plt.imshow(jnp.transpose(frame_buffer, [1, 0, 2]))
-plt.savefig('output1.png')  # pyright: ignore[reportUnknownMemberType]
