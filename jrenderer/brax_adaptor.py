@@ -70,15 +70,15 @@ class BraxRenderer(NamedTuple):
     @staticmethod
     def _getCamera():
         camera = Camera.create(
-            position=jnp.array([10, 10, 10.0]) ,
+            position=jnp.array([7, 7, 7.0]) ,
             target=jnp.zeros(3),
             up=jnp.array([0, 0.0, 1.0]),
             fov=75,
-            aspect=16/9,
+            aspect=1920/1080,
             near=0.1,
             far=10000,
-            X=1280//2,
-            Y=720//2
+            X=1920,
+            Y=1080
         )
         return camera
 

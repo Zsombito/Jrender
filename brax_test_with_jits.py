@@ -2,6 +2,7 @@
 import brax
 from jrenderer.pipeline import Render
 from jax import numpy as jnp
+import jax
 
 import brax
 from brax.envs import ant, humanoid
@@ -27,14 +28,22 @@ print(states[0].pipeline_state.x.pos[3])
 print(states[80].pipeline_state.x.pos[3])
 
 frames = []
+avarage = 0
 
-for i in range(200):
-    start = time.time_ns()
-    pixels = jnp.transpose(brax_renderer.renderState(states[i].pipeline_state), [1, 0, 2])
-    end = time.time_ns()
+for i in range(100):
+    if i == 5:
+        with jax.profiler.trace("jax-trace-brax"):
+            pixels= jax.block_until_ready(brax_renderer.renderState(states[i].pipeline_state))
+    else:
+        start = time.time_ns()
+        pixels= jax.block_until_ready(brax_renderer.renderState(states[i].pipeline_state))
+        end = time.time_ns()
     print(f"Frame{i} took: {(end - start) / 1000 / 1000} ms")
-    pixels = pixels.astype("uint8")
-    frames.append(pixels)
+    frames.append(jnp.transpose(pixels, [1,0,2]).astype("uint8"))
+    if i != 0:
+        avarage += end - start
+
+print(f"On avarage frames took: {avarage / 100 / 1000 / 1000} ms")
 
 print("Making giff")
 import imageio

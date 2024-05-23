@@ -160,10 +160,10 @@ print(states[80].pipeline_state.x.pos[3])
 frames = []
 
 for i in range(40):
-    start = time.time_ns()
     curr_geom_offsets = updateGeomData(geom_offsets, states[i].pipeline_state)
     scene = applyGeomOffsets(scene, curr_geom_offsets)
-    pixels = jnp.transpose(Render.render_forward(scene, camera), [1, 0, 2])
+    start = time.time_ns()
+    pixels = jax.block_until_ready(jnp.transpose(Render.render_forward(scene, camera), [1, 0, 2]))
     end = time.time_ns()
     print(f"Frame{i} took: {(end - start) / 1000 / 1000} ms")
     pixels = pixels.astype("uint8")
