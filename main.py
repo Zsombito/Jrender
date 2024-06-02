@@ -59,11 +59,11 @@ camera = Camera.create(
     target=jnp.zeros(3),
     up=jnp.array([0.0, 1.0, 0.0]),
     fov=90,
-    aspect=16/9,
+    aspect=256/256,
     near=0.1,
     far=10000,
-    X=1280,
-    Y=720
+    X=32,
+    Y=32
 )
 light = Light(camera.viewMatrix, [1, 1, 1], [50.0, 150.0, 100.0, 1], 0)
 lights = jnp.array([
@@ -101,5 +101,8 @@ Render.loadFragmentShaders(stdFragmentShader, stdFragmentExtractor)
 import matplotlib.pyplot as plt
 
 frame_buffer =Render.render_forward(scene, camera)
-plt.imshow(jnp.transpose(frame_buffer, [1, 0, 2]))
+plt.imshow(jnp.transpose(frame_buffer, [1, 0, 2]).astype("uint8"))
 plt.savefig('output.png')  # pyright: ignore[reportUnknownMemberType]
+
+
+print(Render.render_with_grade(scene, camera).viewMatrix.sum())
