@@ -6,7 +6,7 @@ import jax
 
 import brax
 from brax.envs import ant, humanoid
-from jrenderer.pipeline_brax_without_clipping import Render
+from jrenderer.pipeline_brax_raster_optimized import Render
 from jrenderer.brax_adaptor import BraxRenderer
 from jrenderer.shader import stdVertexExtractor, stdVertexShader, stdFragmentExtractor, stdFragmentShader
 import time
@@ -19,13 +19,12 @@ Render.loadFragmentShaders(stdFragmentShader, stdFragmentExtractor)
 human = humanoid.Humanoid()
 
 brax_renderer = BraxRenderer.create(human.sys)
+brax_renderer = brax_renderer.changeCameraLinker(1, 1)
 
 import pickle
 
 with open('states.pkl', 'rb') as f:
     states : list[brax.State] = pickle.load(f)
-print(states[0].pipeline_state.x.pos[3])
-print(states[80].pipeline_state.x.pos[3])
 
 frames = []
 avarage = 0
@@ -39,7 +38,7 @@ for i in range(100):
         pixels= jax.block_until_ready(brax_renderer.renderState(states[i].pipeline_state))
         end = time.time_ns()
     print(f"Frame{i} took: {(end - start) / 1000 / 1000} ms")
-    frames.append(jnp.transpose(pixels, [1,0,2]).astype("uint8"))
+    frames.append(pixels)
     if i != 0:
         avarage += end - start
 

@@ -1,3 +1,4 @@
+
 import jax.experimental
 import jax.experimental.host_callback
 from .scene import Scene
@@ -11,6 +12,7 @@ import jax.lax as lax
 from typing import Callable, List, Tuple, Any
 from .util_functions import homogenousToCartesian
 from functools import partial
+from multiprocess import Pool
 
 
 class Render:
@@ -240,22 +242,18 @@ class Render:
 #                        Rasterization                            #
 ###################################################################
     @jit
-    def __interpolatePrimitive(x, y, idx, corners, kept_face):
+    def __interpolatePrimitive(x, y, idx, corners, kept_face, precalculatedArgs):
         corners = corners[idx]
         frag = jnp.array([x,y])
-        v0 = corners[1, :2] - corners[0, :2] # b-a
-        v1 = corners[2, :2] - corners[0, :2] # c-a
+        v0 = jnp.array([precalculatedArgs[0], precalculatedArgs[1]])
+        v1 = jnp.array([precalculatedArgs[2], precalculatedArgs[3]])
         v2 = frag - corners[0, :2] # p-a
 
-        d00 = jnp.dot(v0, v0)
-        d01 = jnp.dot(v0, v1)
-        d11 = jnp.dot(v1, v1)
         d20 = jnp.dot(v2, v0)
         d21 = jnp.dot(v2, v1)
-        denom = d00*d11 - d01 * d01
 
-        beta = (d11 * d20 - d01 * d21) / denom
-        gamma = (d00 * d21 - d01 * d20) / denom
+        beta = (precalculatedArgs[6] * d20 - precalculatedArgs[5] * d21) / precalculatedArgs[7]
+        gamma = (precalculatedArgs[4] * d21 - precalculatedArgs[5] * d20) / precalculatedArgs[7]
         alpha = 1.0 - gamma - beta
         depth = alpha * corners[0, 2] + beta * corners[1, 2] + gamma * corners[2, 2]
         keep = (alpha > 0) & (beta > 0) & (gamma > 0) & (kept_face[idx] > 0)
@@ -264,9 +262,25 @@ class Render:
         return jnp.array([alpha, beta, gamma, idx, depth], float)
 
     @jit
+    def __precomputeBarycentricParameters(idx, corners):
+        corners = corners[idx]
+        v0 = corners[1, :2] - corners[0, :2] # b-a
+        v1 = corners[2, :2] - corners[0, :2] # c-a
+        d00 = jnp.dot(v0, v0)
+        d01 = jnp.dot(v0, v1)
+        d11 = jnp.dot(v1, v1)
+        denom = d00*d11 - d01 * d01
+        return [v0[0], v0[1], v1[0], v1[1], d00, d01, d11, denom]
+
+
+
+
+    @jit
     def _lineRasterizer(gridIdx, gridX, gridY, loop_unroll, corners, kept_face):
+        precomputedArgsPerPrimitive = vmap(Render.__precomputeBarycentricParameters, [0, None])(gridIdx, corners)
+
         def mapY(x, y, gridIdx):
-            return vmap(Render.__interpolatePrimitive, [None, None, 0, None, None])(x, y, gridIdx, corners, kept_face)
+            return vmap(Render.__interpolatePrimitive, [None, None, 0, None, None, 0])(x, y, gridIdx, corners, kept_face, precomputedArgsPerPrimitive)
 
         def mapYZTest(fragment_depths, y, fragment_candidates):
             idx = fragment_depths.argmin()
@@ -279,7 +293,6 @@ class Render:
 
             return None, selected_fragments
         
-
         _, selected_frags = lax.scan(_perRow, None, gridX, unroll=100)
         return selected_frags
 
