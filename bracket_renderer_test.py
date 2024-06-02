@@ -1,16 +1,22 @@
 from jrenderer.camera import Camera
 from jrenderer.model import Model
 from jrenderer.scene import Scene
-from jrenderer.pipeline_brax_without_clipping import Render
+from jrenderer.pipeline import Render
 from jrenderer.shader import stdVertexExtractor, stdVertexShader, stdFragmentExtractor, stdFragmentShader
 from jrenderer.lights import Light
 from jrenderer.capsule import create_capsule
 from jrenderer.cube import create_cube
 import jax
 import jax.numpy as jnp
-import timeit
+import time
 
 
+
+
+
+
+Render.loadVertexShaders(stdVertexShader, stdVertexExtractor)
+Render.loadFragmentShaders(stdFragmentShader, stdFragmentExtractor)
 
 vertices1 = jnp.array(  # pyright: ignore[reportUnknownMemberType]
     [
@@ -49,10 +55,6 @@ specMap = jnp.array([
         [[0.05, 0.05, 0.05], [0.05, 0.05, 0.05]]
     ]]
 ) * 10
-indices = jnp.array([[0, 2, 3], [0, 1, 2], ])  # pyright: ignore[reportUnknownMemberType]
-
-
-model1 = Model(vertices1, normals, indices, uvs, diffMap, specMap)
 
 camera = Camera.create(
     position=jnp.array([-2, 2, 0]) ,
@@ -70,36 +72,65 @@ lights = jnp.array([
     light.getJnpArray()])
 
 scene = Scene.create(lights, 2, 2)
-#for i in range(10):
-    #print(f"Loop: {i}/10")
-    #indices = jnp.append(indices, indices, 0)
-#model1 = Model(vertices1, normals, indices, uvs, diffMap, specMap)
-
-#idx = scene.add_Model(model1)
 
 capsule : Model = create_capsule(0.5, 1, 1, diffMap, specMap)
 idx, scene =Scene.addModel(scene, capsule)
 
 
-
-Render.loadVertexShaders(stdVertexShader, stdVertexExtractor)
-Render.loadFragmentShaders(stdFragmentShader, stdFragmentExtractor)
-
-#Render.render()
-#Render.render()
-#Render.render()
-
-#print(Render.render_with_grad("MyScene")[0].nonzero())
-
-
-
-#with jax.profiler.trace("./jax-trace-buffer"):
-    #frame_buffer = Render.render_C()
+Render.add_Scene(scene, "Test")
 
 
 
 import matplotlib.pyplot as plt
 
-frame_buffer =Render.render_forward(scene, camera)
-plt.imshow(jnp.transpose(frame_buffer, [1, 0, 2]))
-plt.savefig('output.png')  # pyright: ignore[reportUnknownMemberType]
+_, frame_buffer = Render.render_forward(scene, camera)
+
+
+
+xs = []
+ys = []
+for i in range(1, 10):
+    camera = Camera.create(
+        position=jnp.array([-2 - (10 - i) * 0.5, 2 + (10 - i) * 0.5, 0]) ,
+        target=jnp.zeros(3),
+        up=jnp.array([0.0, 1.0, 0.0]),
+        fov=90,
+        aspect=16/9,
+        near=0.1,
+        far=10000,
+        X=1280,
+        Y=720
+    )
+    start = time.time_ns()
+    nums, pixel =jax.block_until_ready(Render.render_forward(scene, camera))
+    end = time.time_ns()
+    xs.append(nums)
+    ys.append((end - start) / 1000 / 1000)
+
+    
+xs = []
+ys = []
+for i in range(1, 10):
+    camera = Camera.create(
+        position=jnp.array([-2 - (10 - i) * 0.5, 2 + (10 - i) * 0.5, 0]) ,
+        target=jnp.zeros(3),
+        up=jnp.array([0.0, 1.0, 0.0]),
+        fov=90,
+        aspect=16/9,
+        near=0.1,
+        far=10000,
+        X=1280,
+        Y=720
+    )
+    start = time.time_ns()
+    nums, pixel =jax.block_until_ready(Render.render_forward(scene, camera))
+    end = time.time_ns()
+    xs.append(nums)
+    ys.append((end - start) / 1000 / 1000)
+
+plt.plot(xs, ys)
+plt.ylabel("Time taken to render image (ms)")
+plt.xlabel("Number of brackets to render")
+plt.suptitle("Bracketing test")
+plt.savefig("BrackitingTest.png")
+

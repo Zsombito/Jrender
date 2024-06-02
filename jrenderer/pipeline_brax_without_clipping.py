@@ -12,7 +12,6 @@ import jax.lax as lax
 from typing import Callable, List, Tuple, Any
 from .util_functions import homogenousToCartesian
 from functools import partial
-from multiprocess import Pool
 
 
 class Render:
@@ -264,29 +263,6 @@ class Render:
         depth = jnp.where(keep, depth, jnp.inf)
 
         return jnp.array([alpha, beta, gamma, idx, depth], float)
-
-
-    @jit
-    def _rasterize(gridIdx, gridX, gridY, corners, kept_face):
-        def mapY(x, y, gridIdx):
-            return vmap(Render.__interpolatePrimitive, [None, None, 0, None, None])(x, y, gridIdx, corners, kept_face)
-
-        def mapX(x, gridY, gridIdx):
-            return vmap(mapY, [None, 0, None])(x, gridY, gridIdx)
-
-        fragment_candidates = vmap(mapX, [0, None, None])(gridX, gridY, gridIdx)
-        
-        def mapYZTest(frag_depths, x, y, fragment_candidates):
-            idx = frag_depths.argmin()
-            return fragment_candidates[x, y, idx, :]
-        
-        def mapXZTest(frag_depths, x, gridY, fragment_candidates):
-            return vmap(mapYZTest, [0,None, 0, None])(frag_depths, x, gridY, fragment_candidates)
-
-        selected_fragments = vmap(mapXZTest, [0, 0, None, None])(fragment_candidates[:, :, :, 4], gridX, gridY, fragment_candidates)
-        
-
-        return selected_fragments
 
     @jit
     def _lineRasterizer(gridIdx, gridX, gridY, loop_unroll, corners, kept_face):

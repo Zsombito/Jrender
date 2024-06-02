@@ -12,7 +12,6 @@ import jax.lax as lax
 from typing import Callable, List, Tuple, Any
 from .util_functions import homogenousToCartesian
 from functools import partial
-from multiprocess import Pool
 
 
 class Render:
@@ -272,30 +271,25 @@ class Render:
 
         return jnp.array([alpha, beta, gamma, idx, depth], float)
 
-
     @jit
-    def _rasterize(gridIdx, gridX, gridY, corners):
+    def _lineRasterizer(gridIdx, gridX, gridY, loop_unroll, corners):
         def mapY(x, y, gridIdx):
-            return vmap(Render.__interpolatePrimitive, [None, None, 0, None])(x, y, gridIdx, corners)
+            return vmap(Render.__interpolatePrimitive, [None, None, 0, None, None])(x, y, gridIdx, corners)
 
-        def mapX(x, gridY, gridIdx):
-            return vmap(mapY, [None, 0, None])(x, gridY, gridIdx)
+        def mapYZTest(fragment_depths, y, fragment_candidates):
+            idx = fragment_depths.argmin()
+            return fragment_candidates[y, idx, :]
 
-        fragment_candidates = vmap(mapX, [0, None, None])(gridX, gridY, gridIdx)
-        
-        def mapYZTest(frag_depths, x, y, fragment_candidates):
-            idx = frag_depths.argmin()
-            return fragment_candidates[x, y, idx, :]
-        
-        def mapXZTest(frag_depths, x, gridY, fragment_candidates):
-            return vmap(mapYZTest, [0,None, 0, None])(frag_depths, x, gridY, fragment_candidates)
-        
+        def _perRow(_, x):
+            fragment_candidates = vmap(mapY, [None, 0, None])(x, gridY, gridIdx)
 
-        selected_fragments = vmap(mapXZTest, [0, 0, None, None])(fragment_candidates[:, :, :, 4], gridX, gridY, fragment_candidates)
+            selected_fragments = vmap(mapYZTest, [0, 0, None])(fragment_candidates[:, :, 4], gridY, fragment_candidates)
+
+            return None, selected_fragments
         
 
-        return selected_fragments
-
+        _, selected_frags = lax.scan(_perRow, None, gridX, unroll=10)
+        return selected_frags
         
 
 #####################################################################
@@ -334,65 +328,16 @@ class Render:
         
         return vmap(mapX, [0, 0])(shaded_fragments, frameBuffer)
 
-    @jit 
-    def _bufferMixing_part_A(shaded_fragments, frameBuffer, x, y):
-        def mapY(shaded_fragment, defaultV):
-            return jnp.where(shaded_fragment[0] == jnp.inf, defaultV, shaded_fragment[1:])
-
-        def mapX(shaded_fragments, defaultVs):
-            return vmap(mapY, [0,0])(shaded_fragments, defaultVs)
-        
-        sub_area = lax.dynamic_slice(frameBuffer, [x * Render.rasterGrid, y * Render.rasterGrid, 0], [50, 50, 3])
-        return vmap(mapX, [0, 0])(shaded_fragments, sub_area)
-    
-    @jit 
-    def _applyPatches(frame_buffer, frame_patch, x, y):
-        return lax.dynamic_update_slice(frame_buffer, frame_patch, [x * Render.rasterGrid, y * Render.rasterGrid, 0])
-
-            
-        
 
 
 #####################################################################
 #                     Main Pipeline Control                         #
 #####################################################################
-    @jit
-    def _bracket_fun(Brackets, Is, Js, corners, face, norm, perVertexExtra, shaded_perVertexExtra, frame_buffer):
-        def mapedInner(curr_bracket, i, j):
-            with jax.named_scope("Rasterization"):
-                fragments = Render._rasterize(curr_bracket, i, j, corners, curr_bracket.shape[0])
-
-            with jax.named_scope("Fragment shading"): #Continue from here
-                shaded_fragments = Render._fragmentShading(fragments, face, norm, perVertexExtra, shaded_perVertexExtra)
-
-            with jax.named_scope("Buffer mixing"):
-                return Render._bufferMixing_part_A(shaded_fragments, frame_buffer, i, j)
-        return vmap(mapedInner, [0, 0, 0,])(Brackets, Is, Js)
-
-        
-    def _bracketing_extender(brackets, Is, Js, targetDivision):
-        extend_num = targetDivision - (brackets.shape[0] % targetDivision) 
-        brackets_extend = jnp.ones((extend_num, 1, brackets.shape[2]), int) * brackets[0, 0, 0]
-        Is_extend = jnp.ones(extend_num, int) * Is[0]
-        Js_extend = jnp.ones(extend_num, int) * Js[0]
-        brackets = jnp.append(brackets_extend, brackets, 0)
-        Is = jnp.append(Is_extend, Is, 0)
-        Js = jnp.append(Js_extend, Js, 0)
-        return brackets, Is, Js
-
-            
-
-
-
-
-    
-
 
     @staticmethod
     def render_forward(scene : Scene, camera : Camera):
         with jax.named_scope("Geometry Stage:"):
             face_mask, (pos3, norm, face), perVertexExtra, shaded_perVertexExtra = Render._geometryStage(scene, camera)
-
 
         with jax.named_scope("Face filtering and batchin"):
             face = face[face_mask, :]
@@ -402,16 +347,14 @@ class Render:
             corners = Render._generate_corners(pos3, batchedFaces)
             corners = corners.reshape(corners.shape[0] * corners.shape[1], 3, 3)
 
-        frame_buffer = jnp.zeros((camera.X, camera.Y, 3), float)
-
         with jax.named_scope("Rasterization"):
-            fragments = Render._rasterize(lax.iota(int, corners.shape[0]), lax.iota(int, camera.X), lax.iota(int, camera.Y), corners)
+            fragments = Render._lineRasterizer(lax.iota(int, corners.shape[0]), camera.pixelsX, camera.pixelsY, 1, corners)
 
         with jax.named_scope("Fragment shading"): #Continue from here
             shaded_fragments = Render._fragmentShading(fragments, face, norm, perVertexExtra, shaded_perVertexExtra, scene, camera)
 
         with jax.named_scope("Buffer mixing"):
-            frame_buffer = Render._bufferMixing(shaded_fragments, frame_buffer)
+            frame_buffer = Render._bufferMixing(shaded_fragments, camera.defaultFrame)
 
         frame_buffer = frame_buffer * 255
         return frame_buffer.astype(int)
