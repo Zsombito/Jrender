@@ -6,7 +6,7 @@ import jax
 
 import brax
 from brax.envs import ant, humanoid
-from jrenderer.pipeline_brax_raster_optimized import Render
+from jrenderer.pipeline_brax_without_clipping import Render
 from jrenderer.brax_adaptor import BraxRenderer
 from jrenderer.shader import stdVertexExtractor, stdVertexShader, stdFragmentExtractor, stdFragmentShader
 import time
@@ -19,7 +19,8 @@ Render.loadFragmentShaders(stdFragmentShader, stdFragmentExtractor)
 human = humanoid.Humanoid()
 
 brax_renderer = BraxRenderer.create(human.sys)
-brax_renderer = brax_renderer.changeCameraLinker(1, 1)
+config = {"CamLinkMode":2, "CamLinkTarget" : 1}
+brax_renderer = brax_renderer.config(config)
 
 import pickle
 

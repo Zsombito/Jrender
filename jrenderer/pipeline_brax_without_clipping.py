@@ -142,8 +142,8 @@ class Render:
     
     @jit
     def __getFrustrumParams(near : float, far: float, fov: float, aspect: float):
-        hw = jnp.tan(jnp.pi * fov/360) * near
-        hh = hw * (1 / aspect)
+        hw = jnp.tan(jnp.pi * fov*aspect/360) * near
+        hh = hw * (aspect)
         nw = jnp.array([-hw, hh, near])
         ne = jnp.array([hw, hh, near])
         se = jnp.array([hw, -hh, near])

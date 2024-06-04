@@ -1,35 +1,19 @@
+
 from typing import Iterable, NamedTuple, Optional, Any
-
 import jax
-from jax import numpy as jp
-import numpy as onp
-
+from jax import numpy as jnp
 import brax
 from brax import math
-
-import trimesh
-
 from jrenderer.camera import Camera
-from jrenderer.lights import Light
 from jrenderer.capsule import create_capsule
 from jrenderer.cube import create_cube
 from jrenderer.pipeline import Render
-from jrenderer.model import Model
 from jrenderer.scene import Scene
 
-
-from typing import Iterable, NamedTuple, Optional
-
-import jax
-from jax import numpy as jnp
-import numpy as np
 from jaxtyping import Float, Integer, Array
 
 import brax
 from brax import base, envs, math, positional
-
-
-import trimesh
 
 from jrenderer.camera import Camera
 from jrenderer.camera_linker import CameraLink
@@ -37,10 +21,12 @@ from jrenderer.lights import Light
 from jrenderer.capsule import create_capsule
 from jrenderer.cube import create_cube
 from jrenderer.plane import create_plane
-from jrenderer.pipeline_brax_without_clipping import Render
+from jrenderer.pipeline_brax import Render
 from jrenderer.model import Model
 from jrenderer.scene import Scene
 from jrenderer.shader import stdVertexExtractor, stdVertexShader, stdFragmentExtractor, stdFragmentShader
+import mujoco
+from mujoco import mjx
 from jaxtyping import Float, Array, Integer
 
 import mujoco.testdata
@@ -51,11 +37,13 @@ import time
 
 class BraxRenderer(NamedTuple):
     scene : Scene
-    camera : Camera
-    camera_link : CameraLink
+    cameras : Camera
+    camera_links : CameraLink
     geom_offset : Float[Array, "idx 3"]
     geom_rotation : Float[Array, "idx 4"]
     geom_link_idx : Integer[Array, "idx"]
+    updated_scene : Scene
+    updated_camera : Camera
 
     @staticmethod
     def _getLight():
@@ -71,8 +59,8 @@ class BraxRenderer(NamedTuple):
             aspect=1080/720,
             near=0.1,
             far=10000,
-            X=1080,
-            Y=720
+            X=260,
+            Y=180
         )
         return camera
 
@@ -118,7 +106,7 @@ class BraxRenderer(NamedTuple):
         scene, geom_offset, geom_rotation, geom_link_idx = BraxRenderer._extractGeoms(sys)
         camera = BraxRenderer._getCamera()
         cameraLinker = CameraLink(0, 0)
-        return BraxRenderer(scene, camera, cameraLinker, geom_offset, geom_rotation, geom_link_idx)
+        return BraxRenderer(scene, camera, cameraLinker, geom_offset, geom_rotation, geom_link_idx, scene, camera)
 
     @jax.jit
     def _perGeomUpdate(geom_off : Float[Array, "3"], geom_rot, geom_link_idx, xpos, xrot):
@@ -131,20 +119,29 @@ class BraxRenderer(NamedTuple):
         return rotation_matrix @ transition_matrix
 
     @jax.jit
-    def renderState(self, state : brax.State):
+    def _update_state(self, state : brax.State):
         new_mdl_matricies = jax.vmap(BraxRenderer._perGeomUpdate, [0, 0, 0, None, None])(self.geom_offset, self.geom_rotation, self.geom_link_idx, state.x.pos, state.x.rot)
-        scene = self.scene._replace(mdlMatricies=new_mdl_matricies)
-        camera = self.camera_link.updateCamera(self.camera, state.x.pos, state.x.rot, self.geom_offset, self.geom_rotation, self.geom_link_idx)
-        return jnp.transpose(Render.render_forward(scene, camera), [1,0,2]).astype("uint8")
+        updated_scene = self.scene._replace(mdlMatricies=new_mdl_matricies)
+        updated_camera = self.camera_links.updateCamera(self.cameras, state.x.pos, state.x.rot, self.geom_offset, self.geom_rotation, self.geom_link_idx)
+        return updated_scene, updated_camera
 
-        
+    @jax.jit
+    def render_partA(self, state : brax.State):
+        scene, camera = self._update_state(state)
+        return self._replace(updated_camera=camera, updated_scene = scene), Render.render_by_parts_GeometryStage(scene, camera)
 
-        
+    def render_partB(self, face_info):
+        return Render.render_by_parts_Filtering(face_info)
+
+    @jax.jit
+    def render_partC(self, batched_face, face, pos3, normal, perVertex, shaded_PerVertex):
+        return jnp.transpose(Render.render_by_part_Rasterization(batched_face, face, pos3, normal, perVertex, shaded_PerVertex, self.updated_scene, self.updated_camera), [2, 0, 1]).astype("uint8")
+
     def config(self, in_config : dict[str, Any]):
         config = {
             "X":1080,
             "Y":720,
-            "FoV": 75,
+            "FoV": 90,
             "CamPos": jnp.ones(3, float) * 7,
             "CamTarget": jnp.zeros(3, float),
             "CamUp": jnp.array([0,0,1]),
@@ -171,6 +168,4 @@ class BraxRenderer(NamedTuple):
 
         camera_link = CameraLink(config["CamLinkMode"], config["CamLinkTarget"])
 
-        return self._replace(camera = camera, camera_link = camera_link)
-
-    
+        return self._replace(cameras = camera, camera_links = camera_link)

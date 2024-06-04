@@ -161,8 +161,8 @@ class Render:
     
     @jit
     def __getFrustrumParams(near : float, far: float, fov: float, aspect: float):
-        hw = jnp.tan(jnp.pi * fov/360) * near
-        hh = hw * (1 / aspect)
+        hw = jnp.tan(jnp.pi * aspect * fov/360) * near
+        hh = hw * (aspect)
         nw = jnp.array([-hw, hh, near])
         ne = jnp.array([hw, hh, near])
         se = jnp.array([hw, -hh, near])
@@ -266,7 +266,7 @@ class Render:
         gamma = (d00 * d21 - d01 * d20) / denom
         alpha = 1.0 - gamma - beta
         depth = alpha * corners[0, 2] + beta * corners[1, 2] + gamma * corners[2, 2]
-        keep = (alpha >= 0) & (beta >= 0) & (gamma >= 0)
+        keep = (alpha > 0) & (beta > 0) & (gamma > 0)
         depth = jnp.where(keep, depth, jnp.inf)
 
         return jnp.array([alpha, beta, gamma, idx, depth], float)
@@ -341,9 +341,43 @@ class Render:
 
         with jax.named_scope("Face filtering and batchin"):
             face = face[face_mask, :]
-            print(face.shape)
             pos3, batchedFaces  = Render._faceBatching(face, pos3)
 
+        with jax.named_scope("Create brackets"):
+            corners = Render._generate_corners(pos3, batchedFaces)
+            corners = corners.reshape(corners.shape[0] * corners.shape[1], 3, 3)
+
+        with jax.named_scope("Rasterization"):
+            fragments = Render._lineRasterizer(lax.iota(int, corners.shape[0]), camera.pixelsX, camera.pixelsY, 1, corners)
+
+        with jax.named_scope("Fragment shading"): #Continue from here
+            shaded_fragments = Render._fragmentShading(fragments, face, norm, perVertexExtra, shaded_perVertexExtra, scene, camera)
+
+        with jax.named_scope("Buffer mixing"):
+            frame_buffer = Render._bufferMixing(shaded_fragments, camera.defaultFrame)
+
+        frame_buffer = frame_buffer * 255
+        return frame_buffer.astype(int)
+
+
+
+    @jit
+    def render_by_parts_GeometryStage(scene : Scene, camera : Camera):
+        with jax.named_scope("Geometry Stage:"):
+            face_mask, (pos3, norm, face), perVertexExtra, shaded_perVertexExtra = Render._geometryStage(scene, camera)
+        
+        return (face_mask, face, pos3), norm, perVertexExtra, shaded_perVertexExtra 
+
+    
+    def render_by_parts_Filtering(face_mask, face, pos3 ):
+        with jax.named_scope("Face filtering and batchin"):
+            face = face[face_mask, :]
+            pos3, batchedFaces  = Render._faceBatching(face, pos3)
+        
+        return batchedFaces, pos3, face
+
+    @jit
+    def render_by_part_Rasterization(batchedFaces, pos3, face, norm, perVertexExtra, shaded_perVertexExtra, scene, camera):
         with jax.named_scope("Create brackets"):
             corners = Render._generate_corners(pos3, batchedFaces)
             corners = corners.reshape(corners.shape[0] * corners.shape[1], 3, 3)

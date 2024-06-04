@@ -21,7 +21,7 @@ class CameraLink(NamedTuple):
         target_pos = pos + math.rotate(geom_pos[self.target_idx], rot)
         target_rot = math.quat_mul(rot, geom_rot[self.target_idx])
         pos =  jnp.where(self.mode <= 1, camera.position, jnp.where(
-            self.mode == 2, target_pos, target_pos)
+            self.mode == 2, target_pos + jnp.array([-5, 0, 1]), target_pos)
         )
 
         up = jnp.where(self.mode != 3, camera.up, math.rotate(camera.up, target_rot))
@@ -29,7 +29,5 @@ class CameraLink(NamedTuple):
         target = jnp.where(self.mode == 0, camera.target, jnp.where(
             self.mode <= 2, target_pos, math.rotate(jnp.array([1, 0, 0]), target_rot)
         ))
-
-        
         return camera.modify(pos, target, up)
 
