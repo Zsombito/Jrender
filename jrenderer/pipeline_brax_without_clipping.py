@@ -125,24 +125,6 @@ class Render:
 #                  VertexShading & Cliping                        #
 ###################################################################
 
-    @jit
-    def extractForGrad():
-        return Render.currentScene.vertexExtractor(Render.currentScene)
-    # (pos, norm, uv, viewM, projM), axis, face, perVertexExtra = inputs
-
-    @jit
-    def _geometryStage_forGrad(pos, norm, uv, viewM, projM, axis, face, perVertexExtra):
-        camera = Render.currentScene.camera 
-        (pos, norm), shaded_perVertexExtra = vmap(Render.currentScene.vertexShader, [0,0,0,None,None])(pos, norm, uv, viewM, projM)
-        with jax.named_scope("Clipping"):
-            face_mask = Render._clip(pos, face, camera.fov, camera.aspect)
-        
-        with jax.named_scope("Viewport transform"):
-            pos3 = Render._viewPort(pos, camera.viewPortMatrix)
-        
-        return face_mask, (pos3, norm, face), perVertexExtra, shaded_perVertexExtra
-
-    
         
     @jit
     def _applyVertexShader(scene : Scene, camera : Camera):
@@ -160,7 +142,7 @@ class Render:
     
     @jit
     def __getFrustrumParams(near : float, far: float, fov: float, aspect: float):
-        hw = jnp.tan(jnp.pi * fov/180) * near
+        hw = jnp.tan(jnp.pi * fov/360) * near
         hh = hw * (1 / aspect)
         nw = jnp.array([-hw, hh, near])
         ne = jnp.array([hw, hh, near])
@@ -258,7 +240,8 @@ class Render:
         gamma = (d00 * d21 - d01 * d20) / denom
         alpha = 1.0 - gamma - beta
         depth = alpha * corners[0, 2] + beta * corners[1, 2] + gamma * corners[2, 2]
-        keep = (alpha > 0) & (beta > 0) & (gamma > 0) & (kept_face[idx] > 0)
+        keep = (alpha > 0) & (beta > 0) & (gamma > 0) 
+        keep = jnp.where(kept_face[idx] == 1, keep, 0)
         depth = jnp.where(keep, depth, jnp.inf)
 
         return jnp.array([alpha, beta, gamma, idx, depth], float)
@@ -329,13 +312,13 @@ class Render:
 #####################################################################
     
     
-    @jit
     def render_forward(scene : Scene, camera : Camera):
         with jax.named_scope("Geometry Stage:"):
             kept_faces, (pos3, norm, faces), perVertexExtra, shaded_perVertexExtra = Render._geometryStage(scene, camera)
         
         with jax.named_scope("Create brackets"):
             corners = Render._generate_corners(pos3, faces)
+        
 
 
         with jax.named_scope("Rasterization"):

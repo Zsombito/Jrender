@@ -274,7 +274,7 @@ class Render:
     @jit
     def _lineRasterizer(gridIdx, gridX, gridY, loop_unroll, corners):
         def mapY(x, y, gridIdx):
-            return vmap(Render.__interpolatePrimitive, [None, None, 0, None, None])(x, y, gridIdx, corners)
+            return vmap(Render.__interpolatePrimitive, [None, None, 0, None ])(x, y, gridIdx, corners)
 
         def mapYZTest(fragment_depths, y, fragment_candidates):
             idx = fragment_depths.argmin()
@@ -341,6 +341,7 @@ class Render:
 
         with jax.named_scope("Face filtering and batchin"):
             face = face[face_mask, :]
+            print(face.shape)
             pos3, batchedFaces  = Render._faceBatching(face, pos3)
 
         with jax.named_scope("Create brackets"):

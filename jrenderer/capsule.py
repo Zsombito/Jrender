@@ -1984,13 +1984,3 @@ def create_capsule(
     vertecies = jnp.apply_along_axis(lambda x : jnp.array([*x, 1.0]), 1, verts )
     normals = jnp.apply_along_axis(lambda x : jnp.array([*x, 1.0]), 1, normals)
     return Model((vertecies @ object_transform)[:, :3], (normals @ object_transform)[:, :3], _faces, _uvs, diffuse_map, specular_map, transform=transform)
-    return Model(
-        verts=verts,
-        norms=normals,
-        uvs=_uvs,
-        faces=_faces,
-        faces_norm=_faces,
-        faces_uv=_faces,
-        diffuse_map=diffuse_map,
-        specular_map=specular_map,
-    )
