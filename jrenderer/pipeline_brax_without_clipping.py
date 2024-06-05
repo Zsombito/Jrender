@@ -161,7 +161,7 @@ class Render:
 
     @jit
     def _clip(position : Float[Position, "idx"], face : Integer[Face, "idx"], fov : float, aspect : float):
-        cameraArgs = Render.__getFrustrumParams(0.01, 1.0, fov, aspect)
+        cameraArgs = Render.__getFrustrumParams(0.001, 1, fov, aspect)
         mask = vmap(Render.__clipVertex, [0, None, None, None, None, None, None])(position, *cameraArgs)
         return vmap(Render.__filterFaces, [0, None])(face, mask)
 
@@ -246,8 +246,7 @@ class Render:
 
         return jnp.array([alpha, beta, gamma, idx, depth], float)
 
-    @jit
-    def _lineRasterizer(gridIdx, gridX, gridY, loop_unroll, corners, kept_face):
+    def _lineRasterizer_unjitted(gridIdx, gridX, gridY, loop_unroll, corners, kept_face):
         def mapY(x, y, gridIdx):
             return vmap(Render.__interpolatePrimitive, [None, None, 0, None, None])(x, y, gridIdx, corners, kept_face)
 
@@ -263,10 +262,11 @@ class Render:
             return None, selected_fragments
         
 
-        _, selected_frags = lax.scan(_perRow, None, gridX, unroll=100)
+        _, selected_frags = lax.scan(_perRow, None, gridX, unroll=loop_unroll)
         return selected_frags
 
 
+    _lineRasterizer = jit(_lineRasterizer_unjitted, static_argnames=["loop_unroll"])
 
         
 
@@ -312,7 +312,7 @@ class Render:
 #####################################################################
     
     
-    def render_forward(scene : Scene, camera : Camera):
+    def render_forward(scene : Scene, camera : Camera, loop_unroll = 100):
         with jax.named_scope("Geometry Stage:"):
             kept_faces, (pos3, norm, faces), perVertexExtra, shaded_perVertexExtra = Render._geometryStage(scene, camera)
         
@@ -322,7 +322,7 @@ class Render:
 
 
         with jax.named_scope("Rasterization"):
-            fragments = Render._lineRasterizer(lax.iota(int, corners.shape[0]), camera.pixelsX, camera.pixelsY, 1, corners, kept_faces)
+            fragments = Render._lineRasterizer(lax.iota(int, corners.shape[0]), camera.pixelsX, camera.pixelsY, loop_unroll, corners, kept_faces)
 
         with jax.named_scope("Fragment shading"): #Continue from here
             shaded_fragments = Render._fragmentShading(fragments, faces, norm, perVertexExtra, shaded_perVertexExtra, scene, camera)

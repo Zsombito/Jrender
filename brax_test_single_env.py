@@ -1,4 +1,3 @@
-
 import brax
 from jrenderer.pipeline import Render
 from jax import numpy as jnp
@@ -19,7 +18,7 @@ Render.loadFragmentShaders(stdFragmentShader, stdFragmentExtractor)
 human = humanoid.Humanoid()
 
 brax_renderer = BraxRenderer.create(human.sys)
-config = {"CamLinkMode":2, "CamLinkTarget" : 1}
+config = {"CamLinkMode":0, "CamLinkTarget" : 1}
 brax_renderer = brax_renderer.config(config)
 
 import pickle

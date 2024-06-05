@@ -1,4 +1,4 @@
-
+import time
 import jax.experimental
 import jax.experimental.host_callback
 from .scene import Scene
@@ -271,8 +271,7 @@ class Render:
 
         return jnp.array([alpha, beta, gamma, idx, depth], float)
 
-    @jit
-    def _lineRasterizer(gridIdx, gridX, gridY, loop_unroll, corners):
+    def _lineRasterizer_unjitted(gridIdx, gridX, gridY, loop_unroll, corners):
         def mapY(x, y, gridIdx):
             return vmap(Render.__interpolatePrimitive, [None, None, 0, None ])(x, y, gridIdx, corners)
 
@@ -288,8 +287,10 @@ class Render:
             return None, selected_fragments
         
 
-        _, selected_frags = lax.scan(_perRow, None, gridX, unroll=10)
+        _, selected_frags = lax.scan(_perRow, None, gridX, unroll=loop_unroll)
         return selected_frags
+    
+    _lineRasterizer = jit(_lineRasterizer_unjitted, static_argnames=["loop_unroll"])
         
 
 #####################################################################
@@ -335,20 +336,22 @@ class Render:
 #####################################################################
 
     @staticmethod
-    def render_forward(scene : Scene, camera : Camera):
+    def render_forward(scene : Scene, camera : Camera, loop_unroll = 100, debug = False):
         with jax.named_scope("Geometry Stage:"):
             face_mask, (pos3, norm, face), perVertexExtra, shaded_perVertexExtra = Render._geometryStage(scene, camera)
 
+        start = time.time_ns()
         with jax.named_scope("Face filtering and batchin"):
             face = face[face_mask, :]
             pos3, batchedFaces  = Render._faceBatching(face, pos3)
+        end = time.time_ns()
 
         with jax.named_scope("Create brackets"):
             corners = Render._generate_corners(pos3, batchedFaces)
             corners = corners.reshape(corners.shape[0] * corners.shape[1], 3, 3)
 
         with jax.named_scope("Rasterization"):
-            fragments = Render._lineRasterizer(lax.iota(int, corners.shape[0]), camera.pixelsX, camera.pixelsY, 1, corners)
+            fragments = Render._lineRasterizer(lax.iota(int, corners.shape[0]), camera.pixelsX, camera.pixelsY, loop_unroll, corners)
 
         with jax.named_scope("Fragment shading"): #Continue from here
             shaded_fragments = Render._fragmentShading(fragments, face, norm, perVertexExtra, shaded_perVertexExtra, scene, camera)
@@ -357,7 +360,10 @@ class Render:
             frame_buffer = Render._bufferMixing(shaded_fragments, camera.defaultFrame)
 
         frame_buffer = frame_buffer * 255
-        return frame_buffer.astype(int)
+        if debug:
+            return frame_buffer.astype(int), (end - start) / 1000 / 1000
+        else:
+            return frame_buffer.astype(int)
 
 
 

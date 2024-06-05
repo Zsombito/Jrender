@@ -130,12 +130,13 @@ class BraxRenderer(NamedTuple):
         rotation_matrix = jnp.identity(4,float).at[:3, :3].set(jnp.transpose(math.quat_to_3x3(new_rot)))
         return rotation_matrix @ transition_matrix
 
-    @jax.jit
-    def renderState(self, state : brax.State):
+    def _renderState_unjitted(self, state : brax.State, loop_unroll = 100):
         new_mdl_matricies = jax.vmap(BraxRenderer._perGeomUpdate, [0, 0, 0, None, None])(self.geom_offset, self.geom_rotation, self.geom_link_idx, state.x.pos, state.x.rot)
         scene = self.scene._replace(mdlMatricies=new_mdl_matricies)
         camera = self.camera_link.updateCamera(self.camera, state.x.pos, state.x.rot, self.geom_offset, self.geom_rotation, self.geom_link_idx)
-        return jnp.transpose(Render.render_forward(scene, camera), [1,0,2]).astype("uint8")
+        return jnp.transpose(Render.render_forward(scene, camera, loop_unroll = loop_unroll), [1,0,2]).astype("uint8")
+    
+    renderState = jax.jit(_renderState_unjitted, static_argnames=["loop_unroll"])
 
         
 
@@ -151,7 +152,7 @@ class BraxRenderer(NamedTuple):
             "Near": 0.1,
             "Far": 10000,
             "CamLinkMode" : 0,
-            "CamLinkTarget": 0
+            "CamLinkTarget": 0,
         }
 
         for key, value in in_config.items():

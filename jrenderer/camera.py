@@ -67,17 +67,16 @@ class Camera(NamedTuple):
 
     @jit
     def modify(self, position : Vec3f, target : Vec3f, up : Vec3f):
-        forward : Vec3f = normalise(target - position)
-        up = normalise(up)
-        side: Vec3f = normalise(jnp.cross(up, forward))
-        up : Vec3f = normalise(jnp.cross(forward, side))
+        zaxis : Vec3f = normalise(target - position)
+        xaxis: Vec3f = normalise(jnp.cross(up, zaxis))
+        yaxis : Vec3f = jnp.cross(zaxis, xaxis)
         viewMatrix : Matrix4=  (jnp.identity(4)
-            .at[:3, 0].set(side)
-            .at[:3, 1].set(up)
-            .at[:3, 2].set(forward)
-            .at[3, 0].set(-jnp.dot(side, position))
-            .at[3, 1].set(-jnp.dot(up, position))
-            .at[3, 2].set(-jnp.dot(forward, position))
+            .at[:3, 0].set(xaxis)
+            .at[:3, 1].set(yaxis)
+            .at[:3, 2].set(zaxis)
+            .at[3, 0].set(-jnp.dot(xaxis, position))
+            .at[3, 1].set(-jnp.dot(yaxis, position))
+            .at[3, 2].set(-jnp.dot(zaxis, position))
         )
         return self._replace(viewMatrix = viewMatrix, position = position, target = target, up = up, transformMatrix = self.projection @ viewMatrix)
 

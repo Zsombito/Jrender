@@ -91,9 +91,9 @@ for i in range(50):
         timesB.append((end - start) / 1000 / 1000)
 
 
-import imageio
-imageio.mimsave('./outputA.gif', framesA)
-imageio.mimsave('./outputB.gif', framesB)
+#import imageio
+#imageio.mimsave('./outputA.gif', framesA)
+#imageio.mimsave('./outputB.gif', framesB)
 
 import matplotlib.pyplot as plt
 
@@ -105,4 +105,64 @@ plt.legend()
 plt.ylabel("Time render (ms)")
 plt.xlabel("Index of frame")
 plt.suptitle("Clipping test")
-plt.savefig("Clipping_test.png")
+plt.savefig("./tests/Clipping_test.png")
+
+framesA = []
+framesB = []
+timesA = []
+timesB = []
+clipping_times = []
+for i in range(50):
+    camera = Camera.create(
+        position=jnp.array([0, 0, 0]) ,
+        target=jnp.array([math.sin(math.pi/25 * i) * 10, 0, math.cos(math.pi/2.5 * i) * 10], float),
+        up=jnp.array([0.0, 1.0, 0.0]),
+        fov=90,
+        aspect=16/9,
+        near=0.1,
+        far=10000,
+        X=1280,
+        Y=720
+    )
+    start = time.time_ns()
+    pixels, clipping_time= jax.block_until_ready(Render_with_clip.render_forward(scene, camera, debug=True))
+    end = time.time_ns()
+
+    framesA.append(jnp.transpose(pixels, [1, 0, 2]).astype("uint8"))
+    if i != 0:
+        timesA.append((end - start) / 1000 / 1000)
+        clipping_times.append(clipping_time)
+        
+    start = time.time_ns()
+    pixels = jax.block_until_ready(Render_without_clip.render_forward(scene, camera))
+    end = time.time_ns()
+
+    framesB.append(jnp.transpose(pixels, [1, 0, 2]).astype("uint8"))
+    if i != 0:
+        timesB.append((end - start) / 1000 / 1000)
+
+plt.clf()
+plt.plot(frameNmb, timesA, label="With clip")
+plt.plot(frameNmb, timesB, label="Without clip")
+plt.legend()
+plt.ylabel("Time render (ms)")
+plt.ylim(0, 150)
+plt.xlabel("Index of frame")
+plt.suptitle("Clipping test without compilation")
+plt.savefig("./tests/Clipping_test_without_compilation.svg")
+plt.savefig("./tests/Clipping_test_without_compilation.png")
+
+render_times = []
+for i in range(len(timesA)):
+    render_times.append(timesA[i] - clipping_times[i])
+
+plt.clf()
+plt.plot(frameNmb, clipping_times, label="Time spent filtering")
+plt.plot(frameNmb, timesA, label="Time spent rendering")
+plt.legend()
+plt.ylabel("Time render (ms)")
+plt.ylim(0, 80)
+plt.xlabel("Index of frame")
+plt.suptitle("Filtering and rendering times")
+plt.savefig("./tests/Clipping_test_ratio.svg")
+plt.savefig("./tests/Clipping_test_ratio.png")
