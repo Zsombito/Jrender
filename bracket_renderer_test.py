@@ -122,15 +122,24 @@ for i in range(1, 10):
         X=1280,
         Y=720
     )
-    start = time.time_ns()
-    nums, pixel =jax.block_until_ready(Render.render_forward(scene, camera))
-    end = time.time_ns()
+    avg = 0
+    for _ in range(10):
+        start = time.time_ns()
+        nums, pixel =jax.block_until_ready(Render.render_forward(scene, camera))
+        end = time.time_ns()
+        avg += (end - start) / 1000 / 1000
     xs.append(nums)
-    ys.append((end - start) / 1000 / 1000)
+    ys.append((avg / 10) )
 
 plt.plot(xs, ys)
 plt.ylabel("Time taken to render image (ms)")
 plt.xlabel("Number of brackets to render")
 plt.suptitle("Bracketing test")
-plt.savefig("BrackitingTest.png")
+plt.savefig("./tests/BrackitingTest.png")
+plt.savefig("./tests/BrackitingTest.svg")
+
+
+
+
+
 
