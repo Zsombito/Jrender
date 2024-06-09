@@ -319,8 +319,6 @@ class Render:
         with jax.named_scope("Create brackets"):
             corners = Render._generate_corners(pos3, faces)
         
-
-
         with jax.named_scope("Rasterization"):
             fragments = Render._lineRasterizer(lax.iota(int, corners.shape[0]), camera.pixelsX, camera.pixelsY, loop_unroll, corners, kept_faces)
 

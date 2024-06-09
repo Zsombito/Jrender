@@ -11,35 +11,71 @@ dim4 = []
 dim5 = []
 
 for i in range(1, 8):
-    array = jnp.ones(pow(10, i), float)
-    mask = jax.random.randint(jax.random.key(0), [pow(10, i)], 0, 1, int).astype(bool)
+    array = jax.block_until_ready(jnp.ones(pow(10, i), float))
+    mask = jax.block_until_ready(jax.random.randint(jax.random.key(0), [pow(10, i)], 0, 1, int).astype(bool))
     start = time.time_ns()
     jax.block_until_ready(array[mask])
     end = time.time_ns()
     xs.append(pow(10, i))
     dim1.append((end - start / 1000 / 1000))
 
-    array = jnp.ones([pow(10, i), 3], float)
-    mask = jax.random.randint(jax.random.key(0), [pow(10, i)], 0, 1, int).astype(bool)
+    array = jax.block_until_ready(jnp.ones([pow(10, i), 3], float))
+    mask = jax.block_until_ready(jax.random.randint(jax.random.key(0), [pow(10, i)], 0, 1, int).astype(bool))
     start = time.time_ns()
     jax.block_until_ready(array[mask, :])
     end = time.time_ns()
     dim2.append((end - start / 1000 / 1000))
 
-    array = jnp.ones([pow(10, i), 300], float)
-    mask = jax.random.randint(jax.random.key(0), [pow(10, i)], 0, 1, int).astype(bool)
+    array = jax.block_until_ready(jnp.ones([pow(10, i), 300], float))
+    mask = jax.block_until_ready(jax.random.randint(jax.random.key(0), [pow(10, i)], 0, 1, int).astype(bool))
     start = time.time_ns()
     jax.block_until_ready(array[mask, :])
     end = time.time_ns()
     dim3.append((end - start / 1000 / 1000))
 
-    array = jnp.ones([pow(10, i), 3, 3], float)
-    mask = jax.random.randint(jax.random.key(0), [pow(10, i)], 0, 1, int).astype(bool)
+    array = jax.block_until_ready(jnp.ones([pow(10, i), 3, 3], float))
+    mask = jax.block_until_ready(jax.random.randint(jax.random.key(0), [pow(10, i)], 0, 1, int).astype(bool))
     start = time.time_ns()
     jax.block_until_ready(array[mask, :, :])
     end = time.time_ns()
     dim4.append((end - start / 1000 / 1000))
 
+xs = []
+dim1 = []
+dim2 = []
+dim3 = []
+dim4 = []
+dim5 = []
+
+for i in range(1, 7):
+    array = jax.block_until_ready(jnp.ones(pow(10, i), float))
+    mask = jax.block_until_ready(jax.random.randint(jax.random.key(0), [pow(10, i)], 0, 1, int).astype(bool))
+    start = time.time_ns()
+    jax.block_until_ready(array[mask])
+    end = time.time_ns()
+    xs.append(pow(10, i))
+    dim1.append((end - start / 1000 / 1000))
+
+    array = jax.block_until_ready(jnp.ones([pow(10, i), 3], float))
+    mask = jax.block_until_ready(jax.random.randint(jax.random.key(0), [pow(10, i)], 0, 1, int).astype(bool))
+    start = time.time_ns()
+    jax.block_until_ready(array[mask, :])
+    end = time.time_ns()
+    dim2.append((end - start / 1000 / 1000))
+
+    array = jax.block_until_ready(jnp.ones([pow(10, i), 300], float))
+    mask = jax.block_until_ready(jax.random.randint(jax.random.key(0), [pow(10, i)], 0, 1, int).astype(bool))
+    start = time.time_ns()
+    jax.block_until_ready(array[mask, :])
+    end = time.time_ns()
+    dim3.append((end - start / 1000 / 1000))
+
+    array = jax.block_until_ready(jnp.ones([pow(10, i), 3, 3], float))
+    mask = jax.block_until_ready(jax.random.randint(jax.random.key(0), [pow(10, i)], 0, 1, int).astype(bool))
+    start = time.time_ns()
+    jax.block_until_ready(array[mask, :, :])
+    end = time.time_ns()
+    dim4.append((end - start / 1000 / 1000))
 
 import matplotlib.pyplot as plt
 
@@ -64,8 +100,8 @@ times = []
 for j in range(5):
     tmp = []
 
-    for i in range(1, 8):
-        array = jax.random.randint(jax.random.key(0), [pow(10, i), 3], 0, 1000, int)
+    for i in range(1, 7):
+        array = jax.block_until_ready(jax.random.randint(jax.random.key(0), [pow(10, i), 3], 0, 1000, int))
         start = time.time_ns()
         batch, _ = jax.block_until_ready(Render.arrayBatcher(batch_sizes[j], array, [3]))
         end = time.time_ns()

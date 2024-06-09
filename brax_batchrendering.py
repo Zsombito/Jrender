@@ -117,8 +117,7 @@ for t in range(4):
     times.append(tmp)
 
 
-import matplotlib.pyplot as plt
-
+plt.clf()
 frames = range(99)
 for i in range(4):
     plt.plot(frames, times[i], label = f"Batch size: {batch_sizes[i]}")

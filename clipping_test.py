@@ -79,16 +79,14 @@ for i in range(50):
     end = time.time_ns()
 
     framesA.append(jnp.transpose(pixels, [1, 0, 2]).astype("uint8"))
-    if i != 0:
-        timesA.append((end - start) / 1000 / 1000)
+    timesA.append((end - start) / 1000 / 1000)
         
     start = time.time_ns()
     pixels = jax.block_until_ready(Render_without_clip.render_forward(scene, camera))
     end = time.time_ns()
 
     framesB.append(jnp.transpose(pixels, [1, 0, 2]).astype("uint8"))
-    if i != 0:
-        timesB.append((end - start) / 1000 / 1000)
+    timesB.append((end - start) / 1000 / 1000)
 
 
 #import imageio
@@ -97,7 +95,7 @@ for i in range(50):
 
 import matplotlib.pyplot as plt
 
-frameNmb = range(1, 50)
+frameNmb = range(50)
 
 plt.plot(frameNmb, timesA, label="With clip")
 plt.plot(frameNmb, timesB, label="Without clip")
@@ -106,6 +104,7 @@ plt.ylabel("Time render (ms)")
 plt.xlabel("Index of frame")
 plt.suptitle("Clipping test")
 plt.savefig("./tests/Clipping_test.png")
+plt.savefig("./tests/Clipping_test.svg")
 
 framesA = []
 framesB = []
@@ -141,6 +140,7 @@ for i in range(50):
     if i != 0:
         timesB.append((end - start) / 1000 / 1000)
 
+frameNmb = range(49)
 plt.clf()
 plt.plot(frameNmb, timesA, label="With clip")
 plt.plot(frameNmb, timesB, label="Without clip")
