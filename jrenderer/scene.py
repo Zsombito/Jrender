@@ -20,6 +20,12 @@ class Scene(NamedTuple):
 
     @staticmethod
     def create(light, textureX, textureY) -> None:
+        """
+        Initializes a scene with parameter:
+        - light: lights
+        - textureX: Texture widths
+        - textureY: Texture heights
+        """
         vertecies : Float[Position, "idx"] = jnp.empty([0,4], float)
         normals : Float[Normal, "idx"] = jnp.empty([0,4], float)
         uvs : Float[UV, "idx"] = jnp.empty([0,3], float)
@@ -33,6 +39,9 @@ class Scene(NamedTuple):
         return Scene(vertecies, normals, uvs, modelID, modelIDperVertex, faces, diffuseText, specText, lights, mdlMatricies, 0)
     
     def addModel(self, model : Model):
+        """
+        Adds a model to the scene
+        """
         startIdx = self.vertecies.shape[0]
 
         changedFaceIdx = jnp.add(model.faces, jnp.ones(model.faces.shape, int) * startIdx)
@@ -56,6 +65,9 @@ class Scene(NamedTuple):
         return self.unique, Scene(vertecies, normals, uvs, modelID, modelIDperVertex, faces, diffuseText, specText, self.lights, mdlMatricies, unique)
     
     def transformModel(self, idx : int, transform : Matrix4):
+        """
+        Changes a models moodel Matrix based on the index
+        """
         mdlMatricies = self.mdlMatricies.at[idx].set(transform)
         return Scene(self.vertecies, self.normals, self.uvs, self.modelID, self.modelIDperVertex, self.faces, self.diffuseText, self.specText,  self.lights, mdlMatricies, self.unique)
     

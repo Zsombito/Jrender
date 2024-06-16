@@ -1,5 +1,5 @@
 
-from typing import Iterable, NamedTuple, Optional, Any
+from typing import NamedTuple, Any
 import jax
 from jax import numpy as jnp
 import brax
@@ -13,25 +13,17 @@ from jrenderer.scene import Scene
 from jaxtyping import Float, Integer, Array
 
 import brax
-from brax import base, envs, math, positional
+from brax import base, math
 
 from jrenderer.camera import Camera
 from jrenderer.camera_linker import CameraLink
-from jrenderer.lights import Light
 from jrenderer.capsule import create_capsule
 from jrenderer.cube import create_cube
 from jrenderer.plane import create_plane
 from jrenderer.pipeline_brax import Render
-from jrenderer.model import Model
 from jrenderer.scene import Scene
-from jrenderer.shader import stdVertexExtractor, stdVertexShader, stdFragmentExtractor, stdFragmentShader
-import mujoco
-from mujoco import mjx
 from jaxtyping import Float, Array, Integer
 
-import mujoco.testdata
-
-import time
 
 
 
@@ -103,6 +95,9 @@ class BraxRenderer(NamedTuple):
 
     @staticmethod
     def create(sys : base.System):
+        """
+        Creates a BraxRenderer instance containing the scene and camera from a brax system
+        """
         scene, geom_offset, geom_rotation, geom_link_idx = BraxRenderer._extractGeoms(sys)
         camera = BraxRenderer._getCamera()
         cameraLinker = CameraLink(0, 0)
@@ -127,17 +122,40 @@ class BraxRenderer(NamedTuple):
 
     @jax.jit
     def render_partA(self, state : brax.State):
+        """
+        Executes the geometry stage based on the state
+        """
         scene, camera = self._update_state(state)
         return self._replace(updated_camera=camera, updated_scene = scene), Render.render_by_parts_GeometryStage(scene, camera)
 
     def render_partB(self, face_info):
+        """
+        Executes the filtering step, the input should be the output of partA
+        """
         return Render.render_by_parts_Filtering(face_info)
 
     @jax.jit
     def render_partC(self, batched_face, face, pos3, normal, perVertex, shaded_PerVertex):
+        """
+        Executes the rest of the pipeline, based on the input parameters
+        """
         return jnp.transpose(Render.render_by_part_Rasterization(batched_face, face, pos3, normal, perVertex, shaded_PerVertex, self.updated_scene, self.updated_camera), [2, 0, 1]).astype("uint8")
 
     def config(self, in_config : dict[str, Any]):
+        """
+        Allows for configuration of the BraxRenderer's camera parameters
+        Default valus:
+        X: 1080
+        Y: 720
+        FoV: 90
+        CamPos: [7, 7, 7]
+        CamTarget: [0, 0 , 0]
+        CamUp: [0,0,1]
+        Near: 0.1
+        Far: 10000
+        CamLinkMode: 0 [1 for tracking]
+        CamLinkTarget: 0
+        """
         config = {
             "X":1080,
             "Y":720,

@@ -2,17 +2,16 @@
 import jax.experimental
 import jax.experimental.host_callback
 from .scene import Scene
-from .model import Model
-from .r_types import Float, Integer, BoolV, Position, Face, PosXNorm, Vec3f, Matrix4, Normal, UV, Array
+from .r_types import Float, Integer, BoolV, Position, Face, Vec3f, Matrix4
 from jax import vmap, jit
 import jax
 import jax.numpy as jnp
 import jax.lax as lax
-from typing import Callable, List, Tuple, Any
+from typing import Callable
 from .util_functions import homogenousToCartesian
-from functools import partial
 
 
+#Legacy pipeline with bracket rendering
 class Render:
     #Scene variables
     scenes : dict[str, Scene] = {}

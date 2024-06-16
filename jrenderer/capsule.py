@@ -23,6 +23,8 @@ def create_capsule(
       - up_axis: The axis that points up
       - diffuse_map: The diffuse map.
       - specular_map: The specular map.
+      - object_transform: Transformation matrix which modifies the object values
+      - transform: Model Matrix
 
     Reference:
       - [create_capsule](https://github.com/erwincoumans/tinyrenderer/blob/89e8adafb35ecf5134e7b17b71b0f825939dc6d9/tinyrenderer.cpp#L914)

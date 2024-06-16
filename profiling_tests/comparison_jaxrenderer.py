@@ -265,7 +265,7 @@ final.append(avaragesB)
 
 plt.clf()
 plt.plot(pixels, avaragesA, label = "Jaxrenderer")
-plt.plot(pixels, avaragesB, label = "Ours", linestyle="dashed")
+plt.plot(pixels, avaragesB, label = "Jrenderer (ours)", linestyle="dashed")
 plt.legend()
 plt.ylabel("Time taken to render (ms)")
 plt.xlabel("Pixel Count")
@@ -336,6 +336,7 @@ for t in range(4):
   
   
   
+color = ["green", "blue", "red", "purple"]
 
 plt.clf()
 frames = range(120)
@@ -350,6 +351,7 @@ plt.suptitle("Batch Rendering Different Batch Sizes")
 plt.savefig("./tests/CompBatchTest.png")
 plt.savefig("./tests/CompBatchTest.svg")
 
+final = []
 avragesA = []
 avragesB = []
 for i in range(4):
@@ -360,7 +362,7 @@ final.append(avragesA)
 final.append(avragesB)
 plt.clf()
 plt.plot(batch_size, avragesA, label="Jaxrenderer")
-plt.plot(batch_size, avragesB, label="Ours", linestyle="dashed")
+plt.plot(batch_size, avragesB, label="Jrenderer (ours)", linestyle="dashed")
 plt.legend()
 plt.ylabel("Time taken to render batch (ms)")
 plt.xlabel("Batch size")

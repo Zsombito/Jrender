@@ -17,6 +17,15 @@ class Model:
                 specularMap : Optional[TextureMap] = None, 
                 transform : Matrix4 = Identity4f
                 ) -> None:
+        """
+        Creates a model instance with the parameters:
+        - vertecies: Vertex positions
+        - faces: Indecies of 3 vertecies constructing a primitive
+        - Uvs: Vertex texture coordinates
+        - diffuseMap: Diffuse texture
+        - specularMap: Specular texture
+        - transform: Model Matrix
+        """
 
         #Mesh Info
         self.vertecies : Float[Position, "idx"] = jnp.apply_along_axis(lambda x : jnp.array([*x, 1.0]), 1, vertecies)

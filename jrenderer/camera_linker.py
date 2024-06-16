@@ -1,15 +1,10 @@
 
-from .r_types import Vec3f, Identity4f, Matrix4, FloatV
 from typing import NamedTuple
-from .util_functions import normalise
 from .camera import Camera
 import jax.numpy as jnp
-from typing import cast
-import jax.lax as lax
-from jax import jit
-from jaxtyping import Array, Integer, Float
 from brax import math
 
+#Allows for camera to dynamically track objects
 class CameraLink(NamedTuple):
     mode : int
     target_idx : int

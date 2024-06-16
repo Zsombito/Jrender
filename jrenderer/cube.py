@@ -2,7 +2,6 @@
 import jax
 import jax.numpy as jnp
 from jaxtyping import Array, Float
-from jaxtyping import jaxtyped  # pyright: ignore[reportUnknownVariableType]
 from .model import Model
 from .util_functions import homogenousToCartesian
 
@@ -16,7 +15,15 @@ def create_cube(
     object_transform = jnp.identity(4, float),
     transform = jnp.identity(4, float)
 ):
-    _verts = jnp.array(  # pyright: ignore[reportUnknownMemberType]
+    """
+    Creates a cube object based on parameters:
+      - half_extents: Scales for the sizes of the cube
+      - diffuse_map: The diffuse map.
+      - specular_map: The specular map.
+      - object_transform: Transformation matrix which modifies the object values
+      - transform: Model Matrix
+    """
+    _verts = jnp.array(  
         (
             # back
             (-1.0, -1.0, 1.0),  # 0
@@ -84,7 +91,7 @@ def create_cube(
             (0.0, 1.0, 0.0),  # 23
         )
     )
-    _uvs = jnp.array(  # pyright: ignore[reportUnknownMemberType]
+    _uvs = jnp.array(  
         (
             (0.75, 0.25, 1),  # 0
             (1, 0.25, 1),  # 1
@@ -117,7 +124,7 @@ def create_cube(
             (0.25, 0, 1),  # 23
         )
     )
-    _faces = jnp.array(  # pyright: ignore[reportUnknownMemberType]
+    _faces = jnp.array(  
         (
             # back face
             (0, 1, 2),
@@ -142,13 +149,3 @@ def create_cube(
     vertecies = jnp.apply_along_axis(lambda x : jnp.array([*x, 1.0]), 1, _verts * half_extents)
     normals = jnp.apply_along_axis(lambda x : jnp.array([*x, 1.0]), 1, _normals)
     return Model((vertecies @ object_transform)[:, :3], (normals @ object_transform)[:, :3], _faces, _uvs * 4, diffuse_map, specular_map, transform=transform)
-    return Model(
-        verts=_verts * half_extents,
-        norms=_normals,
-        uvs=_uvs * 4,
-        faces=_faces,
-        faces_norm=_faces,
-        faces_uv=_faces,
-        diffuse_map=diffuse_map,
-        specular_map=specular_map,
-    )

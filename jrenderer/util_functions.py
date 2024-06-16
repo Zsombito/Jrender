@@ -19,6 +19,9 @@ def normalise(vector: Float[Array, "*a dim"]) -> Float[Array, "*a dim"]:
 
 @jit
 def homogenousToCartesian(vector: Vec4f) -> Vec3f:
+    """
+    Converts homogoneous coordinates to Cartesian
+    """
     vec = vector / vector[3]
     return vec[:3]
 

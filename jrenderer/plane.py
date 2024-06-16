@@ -8,6 +8,12 @@ from .r_types import Vec3f
 
 
 def create_plane(size : Vec3f, diffText, specText):
+    """
+    Creates a plane:
+    - size: Size of the plane
+    - diffText: Diffuse texture
+    - specText: Specular texture
+    """
     vertex = jnp.array([
         [0, 0, 0],
         [0, 1, 0],

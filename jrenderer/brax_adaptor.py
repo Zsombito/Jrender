@@ -1,51 +1,22 @@
-from typing import Iterable, NamedTuple, Optional, Any
-
-import jax
-from jax import numpy as jp
-import numpy as onp
-
-import brax
-from brax import math
-
-import trimesh
-
-from jrenderer.camera import Camera
-from jrenderer.lights import Light
-from jrenderer.capsule import create_capsule
-from jrenderer.cube import create_cube
-from jrenderer.pipeline import Render
-from jrenderer.model import Model
-from jrenderer.scene import Scene
-
-
-from typing import Iterable, NamedTuple, Optional
+from typing import NamedTuple, Any
 
 import jax
 from jax import numpy as jnp
-import numpy as np
 from jaxtyping import Float, Integer, Array
 
 import brax
-from brax import base, envs, math, positional
+from brax import base, math
 
-
-import trimesh
 
 from jrenderer.camera import Camera
 from jrenderer.camera_linker import CameraLink
-from jrenderer.lights import Light
 from jrenderer.capsule import create_capsule
 from jrenderer.cube import create_cube
 from jrenderer.plane import create_plane
 from jrenderer.pipeline_brax_without_clipping import Render
-from jrenderer.model import Model
 from jrenderer.scene import Scene
-from jrenderer.shader import stdVertexExtractor, stdVertexShader, stdFragmentExtractor, stdFragmentShader
 from jaxtyping import Float, Array, Integer
 
-import mujoco.testdata
-
-import time
 
 
 
@@ -115,6 +86,9 @@ class BraxRenderer(NamedTuple):
 
     @staticmethod
     def create(sys : base.System):
+        """
+        Creates a BraxRenderer instance containing the scene and camera from a brax system
+        """
         scene, geom_offset, geom_rotation, geom_link_idx = BraxRenderer._extractGeoms(sys)
         camera = BraxRenderer._getCamera()
         cameraLinker = CameraLink(0, 0)
@@ -131,6 +105,9 @@ class BraxRenderer(NamedTuple):
         return rotation_matrix @ transition_matrix
 
     def _renderState_unjitted(self, state : brax.State, loop_unroll = 100):
+        """
+        Rendering the scene with the updated parameters based on state
+        """
         new_mdl_matricies = jax.vmap(BraxRenderer._perGeomUpdate, [0, 0, 0, None, None])(self.geom_offset, self.geom_rotation, self.geom_link_idx, state.x.pos, state.x.rot)
         scene = self.scene._replace(mdlMatricies=new_mdl_matricies)
         camera = self.camera_link.updateCamera(self.camera, state.x.pos, state.x.rot, self.geom_offset, self.geom_rotation, self.geom_link_idx)
@@ -142,6 +119,20 @@ class BraxRenderer(NamedTuple):
 
         
     def config(self, in_config : dict[str, Any]):
+        """
+        Allows for configuration of the BraxRenderer's camera parameters
+        Default valus:
+        X: 1080
+        Y: 720
+        FoV: 90
+        CamPos: [7, 7, 7]
+        CamTarget: [0, 0 , 0]
+        CamUp: [0,0,1]
+        Near: 0.1
+        Far: 10000
+        CamLinkMode: 0 [1 for tracking]
+        CamLinkTarget: 0
+        """
         config = {
             "X":1080,
             "Y":720,

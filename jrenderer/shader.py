@@ -8,6 +8,7 @@ from typing import Callable
 import jax.numpy as jnp
 
 #Standard Vertex Shading (Phong):
+#Output format: (position, normal), shaded_perVertex (used in fragmentExtractor)
 @jit
 def stdVertexShader(position : Position, normal : Normal, uv, modelID, mdlMatricies,  view: Matrix4, proj: Matrix4) -> tuple:
     mdlMtrx = mdlMatricies[modelID]
@@ -19,6 +20,7 @@ def stdVertexShader(position : Position, normal : Normal, uv, modelID, mdlMatric
 
     
 #Standard Vertex Info extractor (pos, normal, modelID)
+#Output format: Vertex Shader input, Vertex Shader axis for vmaps, face, perVertexExtraInfo(used in fragment Extractor)
 def stdVertexExtractor(scene : Scene, camera : Camera):
     pos : Float[Position, "idx"] = scene.vertecies
     norm : Float[Normal, "idx"] = scene.normals
@@ -32,6 +34,7 @@ def stdVertexExtractor(scene : Scene, camera : Camera):
     return ((pos, norm, uv, modelIDperVertex, modelMatricies, camera.viewMatrix, camera.projection), [0, 0, 0, 0, None, None, None], face, [modelID])
 
 
+#Fragment Extractor for the fragment shader
 @jit
 def stdFragmentExtractor(idx, faces, norm, perVertexExtra, shaded_perVertexExtra):
     face = faces[idx]
@@ -44,6 +47,7 @@ def stdFragmentExtractor(idx, faces, norm, perVertexExtra, shaded_perVertexExtra
     
     return [normal, worldSpacePosition, uv] , modelID
 
+#Fragment Shader: output [depth, R, G, B] 
 @jit
 def stdFragmentShader(interpolatedFrag, lights, camPos, diffText, specText, normals, worldSpacePosition, uvs):
     def perLight(light, pos, norm, kdiff, kspec):

@@ -1,4 +1,3 @@
-from .util_functions import homogenousToCartesian
 import jax.numpy as jnp
 
 
@@ -6,6 +5,7 @@ import jax.numpy as jnp
 
 
 
+#Basic wrepper for lights
 class Light:
     def __init__(self, viewMatrix, intenisity, position, point):
         self.view = viewMatrix

@@ -27,6 +27,18 @@ class Camera(NamedTuple):
     defaultFrame : Float[Array, "X Y 3"]
 
     def create( position : Vec3f, target : Vec3f, up : Vec3f, fov : float, aspect : float, near : float, far : float, X:int , Y: int):
+        """
+        Creates a Camera instance based on the input parameters
+        - position: Position of the camera
+        - target: The target of the camera
+        - up: The up axis of the camera
+        - fov: Field of View
+        - aspect: Aspect ratio of the image
+        - near: Value for the near clipping plane
+        - far: Value for the far clipping plane
+        - X: Resolution width
+        - Y: Resolution height
+        """
         forward : Vec3f = normalise(target - position)
         up = normalise(up)
         side: Vec3f = normalise(jnp.cross(up, forward))
