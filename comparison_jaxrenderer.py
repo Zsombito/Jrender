@@ -32,8 +32,8 @@ import time
 
 
 
-canvas_width: int = 32 #@param {type:"integer"}
-canvas_height: int = 32 #@param {type:"integer"}
+canvas_width: int = 128 #@param {type:"integer"}
+canvas_height: int = 128 #@param {type:"integer"}
 
 def grid(grid_size: int, color) -> jp.ndarray:
   grid = onp.zeros((grid_size, grid_size, 3), dtype=onp.single)
@@ -89,7 +89,7 @@ def _build_objects(sys: brax.System) -> list[Obj]:
     return objs
 
 
-def _with_state(objs: Iterable[Obj], x: brax.Transform) -> list[Instance]:
+def _with_state(objs: Iterable[Obj], x: brax.Transform, idx = 0) -> list[Instance]:
   """x must has at least 1 element. This can be ensured by calling
     `x.concatenate(base.Transform.zero((1,)))`. x is `state.x`.
 
@@ -234,11 +234,12 @@ for t in range(4):
 
 import matplotlib.pyplot as plt
 
+color = ["green", "blue", "red", "purple"]
 frames = range(120)
 for i in range(4):
     x, y = configs[i]["X"], configs[i]["Y"]
-    plt.plot(frames, timesA[i], label = f"Jaxrenderer Resolution: {x}x{y}")
-    plt.plot(frames, timesB[i], label = f"Jrenderer Resolution: {x}x{y}")
+    plt.plot(frames, timesB[i], label = f"Jrenderer Resolution: {x}x{y}", color=color[i], linestyle="dashed")
+    plt.plot(frames, timesA[i], label = f"Jaxrenderer Resolution: {x}x{y}", color=color[i])
 
 plt.legend()
 plt.ylabel("Time taken to render resolution (ms)")
@@ -250,6 +251,7 @@ plt.savefig("./tests/ComparisonResolution.svg")
 pixels = []
 avaragesA = []
 avaragesB = []
+final = []
 for i in range(4):
     x, y = configs[i]["X"], configs[i]["Y"]
     pixels.append(x*y)
@@ -258,10 +260,12 @@ for i in range(4):
 
 print(avaragesA)
 print(avaragesB)
+final.append(avaragesA)
+final.append(avaragesB)
 
 plt.clf()
 plt.plot(pixels, avaragesA, label = "Jaxrenderer")
-plt.plot(pixels, avaragesB, label = "Jrenderer")
+plt.plot(pixels, avaragesB, label = "Ours", linestyle="dashed")
 plt.legend()
 plt.ylabel("Time taken to render (ms)")
 plt.xlabel("Pixel Count")
@@ -269,181 +273,103 @@ plt.suptitle("Rendering Different Resolutions Comparison")
 plt.savefig("./tests/ComparisonResolutionComp.png")
 plt.savefig("./tests/ComparisonResolutionComp.svg")
 
-##def _eye(sys: brax.System, state: brax.State) -> jp.ndarray:
-  ##"""Determines the camera location for a Brax system."""
-  ##xj = state.x.vmap().do(sys.link.joint)
-  ##dist = jp.concatenate(xj.pos[None, ...] - xj.pos[:, None, ...])
-  ##dist = jp.linalg.norm(dist, axis=1).max()
-  ##off = jp.array([2 * dist, -2 * dist, dist])
 
-  ##return state.x.pos[0, :] + off
+def render_env(renderer : BraxRenderer, state : brax.State, loop_unroll):
+    return renderer.renderState(state, loop_unroll)
+    
 
-##def _up(unused_sys: brax.System) -> jp.ndarray:
-  ##"""Determines the up orientation of the camera."""
-  ##return jp.array([0., 0., 1.])
+def _render_batch_unjitted(renderers, state, loop_unroll = 50):
+    return jax.vmap(render_env, [0, None, None])(renderers, state, loop_unroll)
 
-##def get_camera(
-    ##sys: brax.System,
-    ##state: brax.State,
-    ##width: int = canvas_width,
-    ##height: int = canvas_height,
-##) -> Camera:
-  ##"""Gets camera object."""
-  ##eye, up = _eye(sys, state), _up(sys)
-  ##hfov = 58.0
-  ##vfov = hfov * height / width
-  ##target = get_target(state)
-  ##camera = Camera(
-      ##viewWidth=width,
-      ##viewHeight=height,
-      ##position=eye,
-      ##target=target,
-      ##up=up,
-      ##hfov=hfov,
-      ##vfov=vfov,
-  ##)
+render_batch = jax.jit(_render_batch_unjitted, static_argnames=["loop_unroll"])
 
-  ##return camera
+batch_size = [1, 5, 10, 50]
+@jax.jit
+def create_renderer(sys : brax.System, Ids : int):
+  def _create(sys : brax.System, idx):
+    renderer = BraxRenderer.create(sys)
+    return renderer.config({"X":128,"Y":128})
+  return jax.vmap(_create, [None, 0])(sys, Ids)
 
-##def get_target(state: brax.State) -> jp.ndarray:
-  ##"""Gets target of camera."""
-  ##return jp.array([state.x.pos[0, 0], state.x.pos[0, 1], 0])
+@jax.jit
+def batch_state(state, Ids):
+  def _batch(state, idx):
+    return state
 
-##def render_with_states(objs, sys, states: brax.State):
-  ##"""Return batched states."""
-  ### build inputs
-  ##get_cameras = jax.jit(jax.vmap(lambda state: get_camera(sys, state)))
-  ##batched_camera = get_cameras(states)
-  ##get_targets = jax.jit(jax.vmap(get_target))
-  ##batched_target = get_targets(states)
+  return jax.vmap(_batch, [None, 0])(state, Ids)
 
+@jax.jit
+def vmap_statechange(obj, state, ids):
+  return jax.vmap(_with_state, [None, None, 0])(obj, state, ids)
 
+@jax.jit
+def vmap_jaxrenderer(batched_instances, camera):
+  return jax.vmap(render_instances, [0, None, None, None])(batched_instances, canvas_width, canvas_height, camera)
 
-  ##@jax.jit
-  ##def render(states: brax.State) -> jp.ndarray:
-    ##get_instances = jax.jit(jax.vmap(lambda state: _with_state(objs, state.x.concatenate(base.Transform.zero((1,))))))
-    ##batched_instances = get_instances(states)
-
-    ##def _render(instances, camera, target) -> jp.ndarray:
-      ##_render = jax.jit(
-        ##render_instances,
-        ##static_argnames=("width", "height", "enable_shadow"),
-        ##inline=True,
-      ##)
-      ##img = _render(instances=instances, width=canvas_width, height=canvas_height, camera=camera, camera_target=target)
-      ##arr = transpose_for_display((img * 255).astype(jp.uint8))
-
-      ##return arr
-
-    ### render
-    ##_render_batch = jax.jit(jax.vmap(_render))
-    ##images = _render_batch(batched_instances, batched_camera, batched_target)
-
-    ##return images
-
-  ##def copy_back_images(images: jp.ndarray) -> list[Image.Image]:
-    ### copy back
-    ##images_in_device = jax.device_get(images)
-
-    ##np_arrays: Iterable[onp.ndarray] = map(onp.asarray, images_in_device)
-    ##frames: list[Image.Image] = [Image.fromarray(arr) for arr in np_arrays]
-
-    ##return frames
-
-
-  ##render_compiled = jax.jit(render).lower(states).compile()
-
-  ##def wrap(states: brax.State) -> list[Image.Image]:
-    ##images = render_compiled(states)
-
-    ##return copy_back_images(images)
-
-  ##return wrap
-
-
-##def render_env(renderer : BraxRenderer, state : brax.State, loop_unroll):
-    ##return renderer.renderState(state, loop_unroll)
-
-##def _render_batch_unjitted(renderers, state, loop_unroll = 50):
-    ##return jax.vmap(render_env, [0, None, None])(renderers, state, loop_unroll)
-
-##render_batch = jax.jit(_render_batch_unjitted, static_argnames=["loop_unroll"])
-
-##batch_size = [1, 5, 10, 50]
-##@jax.jit
-##def create_renderer(sys : brax.System, Ids : int):
-  ##def _create(sys : brax.System, idx):
-    ##renderer = BraxRenderer.create(sys)
-    ##return renderer.config({"X":32,"Y":32})
-  ##return jax.vmap(_create, [None, 0])(sys, Ids)
-
-##@jax.jit
-##def batch_state(state, Ids):
-  ##def _batch(state, idx):
-    ##return state
-
-  ##return jax.vmap(_batch, [None, 0])(state, Ids)
-
-
-##timesA = []
-##timesB = []
-##for t in range(4):
-  ##Ids = jax.lax.iota(int, batch_size[t])
-  ##obj = _build_objects(human.sys)
-  ##tmp = []
-  ##for i in range(11):
-    ##batched_states = jax.block_until_ready(batch_state(states[i].pipeline_state, Ids))
-    ##start = time.time_ns()
-    ##_ = jax.block_until_ready(render_with_states(obj, human.sys, batched_states))
-    ##end = time.time_ns()
-    ##if i != 0:
-      ##tmp.append((end - start) / 1000 / 1000)
-    ##print(f"Running test {t}, frame {i}, with jaxrenderer")
+camera = get_camera()
+timesA = []
+timesB = []
+for t in range(4):
+  Ids = jax.lax.iota(int, batch_size[t])
+  obj = _build_objects(human.sys)
+  tmp = []
+  for i in range(121):
+    batched_states = jax.block_until_ready(vmap_statechange(obj, states[i].pipeline_state.x, Ids))
+    start = time.time_ns()
+    _ = jax.block_until_ready(vmap_jaxrenderer(batched_states, camera))
+    end = time.time_ns()
+    if i != 0:
+      tmp.append((end - start) / 1000 / 1000)
+    print(f"Running test {t}, frame {i}, with jaxrenderer")
   
-  ##timesA.append(tmp)
-  ##renderers = create_renderer(human.sys, Ids)
-  ##tmp = []
-  ##for i in range(11):
-    ##start = time.time_ns()
-    ##_ = jax.block_until_ready(render_batch(renderers, states[i].pipeline_state, 50))
-    ##end = time.time_ns()
-    ##if i != 0:
-      ##tmp.append((end - start) / 1000 / 1000)
-    ##print(f"Running test {t}, frame {i}, with jrenderer")
-  ##timesB.append(tmp)
+  timesA.append(tmp)
+  renderers = create_renderer(human.sys, Ids)
+  tmp = []
+  for i in range(121):
+    start = time.time_ns()
+    _ = jax.block_until_ready(render_batch(renderers, states[i].pipeline_state, 50))
+    end = time.time_ns()
+    if i != 0:
+      tmp.append((end - start) / 1000 / 1000)
+    print(f"Running test {t}, frame {i}, with jrenderer")
+  timesB.append(tmp)
   
   
   
 
-##plt.clf()
-##frames = range(10)
-##for i in range(4):
-    ##plt.plot(frames, timesA[i], label = f"Jaxrenderer with batch size: {batch_size[i]}")
-    ##plt.plot(frames, timesB[i], label = f"Jrenderer with batch size: {batch_size[i]}")
+plt.clf()
+frames = range(120)
+for i in range(4):
+    plt.plot(frames, timesB[i], label = f"Jrenderer with batch size: {batch_size[i]}" , linestyle="dashed", color=color[i])
+    plt.plot(frames, timesA[i], label = f"Jaxrenderer with batch size: {batch_size[i]}", color = color[i])
 
-##plt.legend()
-##plt.ylabel("Time taken to render batch (ms)")
-##plt.xlabel("Frame idx")
-##plt.suptitle("Batch Rendering Different Batch Sizes")
-##plt.savefig("./tests/CompBatchTest.png")
-##plt.savefig("./tests/CompBatchTest.svg")
+plt.legend()
+plt.ylabel("Time taken to render batch (ms)")
+plt.xlabel("Frame idx")
+plt.suptitle("Batch Rendering Different Batch Sizes")
+plt.savefig("./tests/CompBatchTest.png")
+plt.savefig("./tests/CompBatchTest.svg")
 
-##avragesA = []
-##avragesB = []
-##for i in range(4):
-    ##avragesA.append(sum(timesA[i]) / 10)
-    ##avragesB.append(sum(timesB[i]) / 10)
+avragesA = []
+avragesB = []
+for i in range(4):
+    avragesB.append(sum(timesB[i]) / 120)
+    avragesA.append(sum(timesA[i]) / 120)
 
-##plt.clf()
-##plt.plot(batch_size, avragesA, label="Jaxrenderer")
-##plt.plot(batch_size, avragesB, label="Jrenderer")
-##plt.ylabel("Time taken to render batch (ms)")
-##plt.xlabel("Batch size")
-##plt.suptitle("Batch Rendering Different Batch Sizes Comparison")
-##plt.savefig("./tests/CompBatchComp.png")
-##plt.savefig("./tests/CompBatchComp.svg")
+final.append(avragesA)
+final.append(avragesB)
+plt.clf()
+plt.plot(batch_size, avragesA, label="Jaxrenderer")
+plt.plot(batch_size, avragesB, label="Ours", linestyle="dashed")
+plt.legend()
+plt.ylabel("Time taken to render batch (ms)")
+plt.xlabel("Batch size")
+plt.suptitle("Batch Rendering Different Batch Sizes Comparison")
+plt.savefig("./tests/CompBatchComp.png")
+plt.savefig("./tests/CompBatchComp.svg")
     
   
+print(final)
   
 
 
