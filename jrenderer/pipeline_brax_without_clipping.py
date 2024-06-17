@@ -257,10 +257,10 @@ class Render:
             frame_buffer = Render._bufferMixing(shaded_fragments, camera.defaultFrame)
 
         frame_buffer = frame_buffer * 255
-        return frame_buffer.astype(int)
+        return frame_buffer
 
     @jit
-    def render_with_grade(scene : Scene, camera : Camera):
+    def render_gradients(scene : Scene, camera : Camera):
         def _render(
            vertecies,
            normals,
@@ -278,7 +278,7 @@ class Render:
             newScene = Scene(vertecies, normals, uvs, modelID, modelIDperVertex, faces, diffuseText, specText, lights, mdlMatricies, unique)
             return Render.render_forward(newScene, camera)
 
-        _render_grad = jax.jacrev(Render.render_forward, 1, allow_int=True)
+        _render_grad = jax.jacrev(Render.render_forward, [0,1], allow_int=True)
 
         return _render_grad(
             scene, camera

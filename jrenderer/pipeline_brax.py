@@ -270,9 +270,9 @@ class Render:
 
         frame_buffer = frame_buffer * 255
         if debug:
-            return frame_buffer.astype(int), (end - start) / 1000 / 1000
+            return frame_buffer, (end - start) / 1000 / 1000
         else:
-            return frame_buffer.astype(int)
+            return frame_buffer
 
 
 
@@ -309,3 +309,27 @@ class Render:
         frame_buffer = frame_buffer * 255
         return frame_buffer.astype(int)
 
+
+    def render_gradients(scene : Scene, camera : Camera):
+        def _render(
+           vertecies,
+           normals,
+           uvs,
+           modelID,
+           modelIDperVertex,
+           faces,
+           diffuseText,
+           specText,
+           lights,
+           mdlMatricies,
+           unique,
+           camera : Camera 
+        ):
+            newScene = Scene(vertecies, normals, uvs, modelID, modelIDperVertex, faces, diffuseText, specText, lights, mdlMatricies, unique)
+            return Render.render_forward(newScene, camera)
+
+        _render_grad = jax.jacrev(Render.render_forward, [0,1], allow_int=True)
+
+        return _render_grad(
+            scene, camera
+        )
