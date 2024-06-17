@@ -1,7 +1,4 @@
 [![PyPI Version](https://img.shields.io/pypi/v/jrenderer?logo=pypi)](https://pypi.org/project/jrenderer)
-[![License](https://img.shields.io/github/license/Zsombito/Jrenderer)](https://github.com/Zsombito/Jrender/blob/main/LICENSE)
-
-
 
 
 # Jrender: A Differentiable Batch Renderer in JAX
