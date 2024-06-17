@@ -9,3 +9,4 @@ brax_output
 build
 dist
 jrenderer.egg-info
+setup.py
