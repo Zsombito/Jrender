@@ -1,6 +1,5 @@
 [![PyPI Version](https://img.shields.io/pypi/v/jrenderer?logo=pypi)](https://pypi.org/project/jrenderer)
-[![Python Versions](https://img.shields.io/pypi/pyversions/jrenderer?logo=python)](https://pypi.org/project/jrenderer)
-[![License](https://img.shields.io/github/license/JoeyTeng/jrenderer)](https://github.com/JoeyTeng/jrenderer/blob/master/LICENSE)
+[![License](https://img.shields.io/github/license/Zsombito/jrenderer)](https://github.com/Zsombito/jrenderer/blob/master/LICENSE)
 
 
 
@@ -73,9 +72,13 @@ _, scene = scene.addModel(cubeMdl)
 
 #Generate Image
 frame_buffer =Render.render_forward(scene, camera).astype("uint8")
+
+#For gradients
+gradients = Render.render_gradients(scene, camera)
 ```
 
 For more complex examples check [examples](examples) or the [profiling tests](profiling_tests) included in the repo.
+
 
 ## Shader Support
 
@@ -86,3 +89,5 @@ To implement your own shaders, check [shader.py](jrenderer/shader.py). Implement
 Render.loadVertexShaders(myVertexShader, myVertexExtractor)
 Render.loadFragmentShaders(myFragmentShader, myFragmentExtractor)
 ```
+
+## Gallery
