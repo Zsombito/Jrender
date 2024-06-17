@@ -89,3 +89,8 @@ Render.loadFragmentShaders(myFragmentShader, myFragmentExtractor)
 ```
 
 ## Gallery
+![Batch Rendererd Example of the Humanoid Brax environment](https://github.com/Zsombito/Jrender/blob/main/gallary/animation.gif)
+> Batch Rendererd Example of the Humanoid Brax environment Note: Resolution is set low to avoid the .gif from lagging
+
+![Simple Cube Example](https://github.com/Zsombito/Jrender/blob/main/gallary/cube.png)
+> Simple Cube Example
