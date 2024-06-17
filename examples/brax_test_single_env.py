@@ -1,12 +1,7 @@
 import brax
-from jrenderer.pipeline import Render
 import jax
-
-import brax
 from brax.envs import humanoid
-from jrenderer.pipeline_brax_without_clipping import Render
 from jrenderer.brax_adaptor import BraxRenderer
-from jrenderer.shader import stdVertexExtractor, stdVertexShader, stdFragmentExtractor, stdFragmentShader
 
 
 
