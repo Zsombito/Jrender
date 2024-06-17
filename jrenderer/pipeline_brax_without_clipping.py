@@ -257,7 +257,7 @@ class Render:
             frame_buffer = Render._bufferMixing(shaded_fragments, camera.defaultFrame)
 
         frame_buffer = frame_buffer * 255
-        return frame_buffer
+        return frame_buffer.astype(int)
 
     @jit
     def render_with_grade(scene : Scene, camera : Camera):

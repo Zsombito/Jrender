@@ -1,16 +1,8 @@
-
-from jrenderer.camera import Camera
-from jrenderer.model import Model
-from jrenderer.scene import Scene
-from jrenderer.pipeline import Render
-from jrenderer.shader import stdVertexExtractor, stdVertexShader, stdFragmentExtractor, stdFragmentShader
-from jrenderer.lights import Light
-from jrenderer.capsule import create_capsule
-import jax
+from jrenderer import Camera, Model, Scene, Render, Light
 import jax.numpy as jnp
-import timeit
 
 
+#Create model parameters
 vec = jnp.array([
     [-1, 1, 0],
     [1, 1, 0],
@@ -48,11 +40,13 @@ diffMap = jnp.array([[[[0, 1, 0]]]])
 spec = jnp.array([[[[0.05, 0.05, 0.05]]]]) 
 diffMap2 = jnp.array([[[[1, 0, 0]]]])
 
+#Create Models
 mdl = Model(vec, norm, faces, uv, diffMap, spec)
 mdl2 = Model(vec2, norm, faces, uv, diffMap2, spec)
 
 
-camera = Camera(
+#Create camera
+camera = Camera.create(
     position=jnp.array([0, 0, 5]) ,
     target=jnp.zeros(3),
     up=jnp.array([0.0, 1.0, 0.0]),
@@ -63,19 +57,23 @@ camera = Camera(
     X=1280,
     Y=720
 )
-light = Light(camera.viewMatrix, [1, 1, 1], [0.0, 0.0, 1.0, 1], 0)
+
+#Create Lights
+light = Light([1, 1, 1], [0.0, 0.0, 1.0, 1], 0)
 lights = jnp.array([
     light.getJnpArray()])
 
-scene = Scene(camera, lights, 1, 1)
-idx = scene.add_Model(mdl)
-idx = scene.add_Model(mdl2)
-scene.changeShader(stdVertexExtractor, stdVertexShader, stdFragmentExtractor, stdFragmentShader)
-Render.add_Scene(scene, "MyScene")
-frame_buffer =Render.render_forward()
+#Creat scene
+scene : Scene = Scene.create(lights, 1, 1)
+idx, scene = scene.addModel(mdl)
+idx, scene= scene.addModel(mdl2)
+
+
+#Render Image
+frame_buffer =Render.render_forward(scene, camera).astype("uint8")
 
 import matplotlib.pyplot as plt
 
 print(frame_buffer.shape)
 plt.imshow(jnp.transpose(frame_buffer, [1, 0, 2]))
-plt.savefig('output.png')  # pyright: ignore[reportUnknownMemberType]
+plt.savefig('./brax_output/triangle.png')  

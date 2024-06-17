@@ -6,3 +6,6 @@ brax_output
 *.pkl
 *.gif
 *.svg
+build
+dist
+jrenderer.egg-info
